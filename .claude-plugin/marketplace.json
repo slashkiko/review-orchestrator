@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "review-orchestrator",
+  "description": "Independent multi-perspective code review for Codex and Claude Code.",
+  "owner": {
+    "name": "slashkiko"
+  },
+  "plugins": [
+    {
+      "name": "review-orchestrator",
+      "source": "./plugins/review-orchestrator",
+      "description": "Run evidence-backed multi-perspective code reviews with independent specialist agents.",
+      "license": "Apache-2.0",
+      "category": "Developer Tools",
+      "tags": [
+        "code-review",
+        "multi-agent",
+        "quality",
+        "risk-analysis"
+      ]
+    }
+  ]
+}

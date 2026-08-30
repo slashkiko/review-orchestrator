@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.0 - 2026-08-30
+
+- Packaged the shared Skill as an independently installable Codex and Claude
+  Code Plugin.
+- Added public repository documentation, Apache-2.0 licensing, and CI metadata.
+- Preserved one host-neutral Skill source for both agent hosts.
+
 ## v1.2 - 2026-08-30
 
 - Added checkout-bound, explicitly approved, one-shot mechanical gate execution.

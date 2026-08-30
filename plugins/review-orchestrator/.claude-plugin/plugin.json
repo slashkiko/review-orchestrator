@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "review-orchestrator",
+  "displayName": "Review Orchestrator",
+  "version": "1.3.0",
+  "description": "Run evidence-backed multi-perspective code reviews with independent specialist agents.",
+  "author": {
+    "name": "slashkiko"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "code-review",
+    "multi-agent",
+    "quality",
+    "risk-analysis"
+  ]
+}

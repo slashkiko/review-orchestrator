@@ -1,0 +1,32 @@
+{
+  "name": "review-orchestrator",
+  "version": "1.3.0",
+  "description": "Run evidence-backed multi-perspective code reviews with independent specialist agents.",
+  "author": {
+    "name": "slashkiko"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "code-review",
+    "multi-agent",
+    "quality",
+    "risk-analysis"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Review Orchestrator",
+    "shortDescription": "Coordinate independent specialist code reviews.",
+    "longDescription": "Captures an immutable change snapshot, routes it to independent specialist reviewers, validates their evidence, and reports findings with explicit coverage.",
+    "developerName": "slashkiko",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Multi-perspective review",
+      "Risk-based reviewer routing",
+      "Evidence validation"
+    ],
+    "defaultPrompt": [
+      "Review this change from multiple independent perspectives.",
+      "Run the full review-orchestrator workflow on this PR."
+    ]
+  }
+}

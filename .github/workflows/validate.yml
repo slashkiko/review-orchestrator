@@ -1,0 +1,36 @@
+name: Validate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review-orchestrator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate cross-host metadata
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Test review-orchestrator
+        run: >-
+          python3 -m unittest discover
+          -s plugins/review-orchestrator/skills/review-orchestrator/tests
+          -p 'test_*.py'

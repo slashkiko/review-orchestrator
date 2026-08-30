@@ -118,9 +118,9 @@ class ValidateFindingsTest(unittest.TestCase):
         result = self.base_result(snapshot)
         result["coverage"]["examined"] = [value]
         variants.append(result)
-        for field in ("command", "scope", "summary"):
+        for field in ("command", "scope", "reason"):
             result = self.base_result(snapshot)
-            command = {"command": "check", "scope": "diff", "result": "passed", "summary": "Completed."}
+            command = {"command": "check", "scope": "diff", "outcome": "passed", "attribution": "diff", "reason": "Completed."}
             command[field] = value
             result["coverage"]["commands"] = [command]
             variants.append(result)
@@ -258,10 +258,21 @@ class ValidateFindingsTest(unittest.TestCase):
         malformed = self.base_result()
         malformed["extra"] = "unexpected"
         malformed["unverifiable"] = ["missing context"]
-        malformed["coverage"]["commands"] = [{"command": "tests", "result": "unknown"}]
+        malformed["coverage"]["commands"] = [{"command": "tests", "outcome": "unknown"}]
         output = self.assert_invalid(malformed)
         self.assertTrue(any("unverifiable[0]" in error for error in output["errors"]))
         self.assertTrue(any("coverage.commands[0]" in error for error in output["errors"]))
+
+    def test_normalizes_unversioned_v1_command_schema(self) -> None:
+        result = self.base_result()
+        result["coverage"]["commands"] = [{
+            "command": "tests", "scope": "diff", "result": "passed", "summary": "Legacy command result.",
+        }]
+        output = self.assert_valid(result)
+        command = output["result"]["coverage"]["commands"][0]
+        self.assertEqual("passed", command["outcome"])
+        self.assertEqual("unknown", command["attribution"])
+        self.assertNotIn("result", command)
 
     def test_rejects_tampered_snapshot_identity(self) -> None:
         tampered = copy.deepcopy(self.snapshot)
@@ -283,7 +294,7 @@ class ValidateFindingsTest(unittest.TestCase):
             "coverage": {
                 "examined": ["app.py"],
                 "not_examined": [{"area": "external schema", "reason": "No read access was available."}],
-                "commands": [{"command": "schema check", "scope": "external schema", "result": "not_run", "summary": "No configured command."}],
+                "commands": [{"command": "schema check", "scope": "external schema", "outcome": "not_run", "attribution": "unknown", "reason": "No configured command."}],
             },
         })
         self.assert_valid(partial)

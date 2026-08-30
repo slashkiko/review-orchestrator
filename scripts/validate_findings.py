@@ -24,7 +24,8 @@ SEVERITIES = {"critical", "high", "medium", "low"}
 CONFIDENCES = {"high", "medium", "low"}
 STATUSES = {"completed", "partial", "failed"}
 METHODS = {"static", "command", "external-primary-source"}
-COMMAND_RESULTS = {"passed", "failed", "not_run"}
+COMMAND_OUTCOMES = {"passed", "failed", "blocked", "not_run"}
+COMMAND_ATTRIBUTIONS = {"diff", "preexisting", "environment", "unknown"}
 LOCATION_SIDES = {"old", "new", "none"}
 EVIDENCE_SIDES = {"old", "new"}
 NON_LINE_KINDS = {"addition", "deletion", "rename", "copy", "mode", "binary"}
@@ -38,7 +39,7 @@ EVIDENCE_FIELDS = {"path", "side", "line", "reason"}
 UNVERIFIABLE_FIELDS = {"id", "claim", "missing_evidence", "why_it_matters", "retrieval"}
 COVERAGE_FIELDS = {"examined", "not_examined", "commands"}
 NOT_EXAMINED_FIELDS = {"area", "reason"}
-COMMAND_FIELDS = {"command", "scope", "result", "summary"}
+COMMAND_FIELDS = {"command", "scope", "outcome", "attribution", "reason"}
 SENSITIVE_CANDIDATE_FIELDS = {"candidate_id", "type", "fingerprint"}
 RESULT_FIELDS = {"reviewer", "snapshot_hash", "status", "summary", "findings", "unverifiable", "coverage"}
 
@@ -190,6 +191,8 @@ def snapshot_identity_hash(snapshot: dict[str, Any]) -> str | None:
             "route_candidates": snapshot["route_candidates"],
             "sensitive_candidates": snapshot["sensitive_candidates"],
             "configured_gates": snapshot["configured_gates"],
+            "scope_status": snapshot["scope_status"],
+            "scope_gaps": snapshot["scope_gaps"],
         }
     except KeyError:
         return None
@@ -450,11 +453,23 @@ def validate_coverage(value: Any, errors: list[str]) -> dict[str, Any]:
             if not isinstance(item, dict):
                 errors.append(f"{where} must be an object")
                 continue
+            # v1.0 emitted result/summary without a schema version. Preserve
+            # compatibility by normalizing the unambiguous legacy shape.
+            if set(item) == {"command", "scope", "result", "summary"}:
+                legacy_result = item["result"]
+                item = {
+                    "command": item["command"], "scope": item["scope"],
+                    "outcome": legacy_result, "attribution": "unknown",
+                    "reason": item["summary"],
+                }
+                commands[index] = item
             exact_fields(item, COMMAND_FIELDS, where, errors)
-            for key in ("command", "scope", "summary"):
+            for key in ("command", "scope", "reason"):
                 require_string(item, key, where, errors)
-            if item.get("result") not in COMMAND_RESULTS:
-                errors.append(f"{where}.result is invalid")
+            if item.get("outcome") not in COMMAND_OUTCOMES:
+                errors.append(f"{where}.outcome is invalid")
+            if item.get("attribution") not in COMMAND_ATTRIBUTIONS:
+                errors.append(f"{where}.attribution is invalid")
     return {"examined": examined, "not_examined": not_examined, "commands": commands if isinstance(commands, list) else []}
 
 
@@ -483,7 +498,7 @@ def canonical_finding(finding: dict[str, Any]) -> str:
 
 def validate(snapshot: dict[str, Any], result: Any) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
-    if snapshot.get("schema_version") != 2:
+    if snapshot.get("schema_version") != 3:
         errors.append("snapshot schema version is unsupported")
     calculated_snapshot_hash = snapshot_identity_hash(snapshot)
     if calculated_snapshot_hash is None or calculated_snapshot_hash != snapshot.get("snapshot_hash"):

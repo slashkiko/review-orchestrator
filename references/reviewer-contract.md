@@ -15,12 +15,16 @@ Return one JSON object and no prose outside it:
   "coverage": {
     "examined": ["path or symbol"],
     "not_examined": [{"area": "contract", "reason": "why it was not evaluated"}],
-    "commands": [{"command": "...", "scope": "changed package", "result": "passed|failed|not_run", "summary": "redacted result"}]
+    "commands": [{"command": "...", "scope": "changed package", "outcome": "passed|failed|blocked|not_run", "attribution": "diff|preexisting|environment|unknown", "reason": "redacted result or skip reason"}]
   }
 }
 ```
 
 `status` is `completed`, `partial`, or `failed`. `completed` requires examined coverage and no unevaluated items. `partial` requires both examined and not-examined coverage. `failed` has no findings, unverifiable items, or examined coverage and must name the unevaluated area. An empty `findings` array means no supported finding only for the areas in `coverage.examined`.
+
+Gate startup/configuration failures use `outcome: blocked` and are coverage facts, not LLM findings. A failed command must have a deliberate attribution; do not label a command failure diff-caused without evidence.
+
+For compatibility, the validator accepts an unversioned v1.0 command object using `result` and `summary`, then normalizes it to `outcome`, `attribution: unknown`, and `reason`. New output must use the v1.1 fields.
 
 Each `unverifiable` item has non-empty `id`, `claim`, `missing_evidence`, `why_it_matters`, and `retrieval` fields. Do not use an unstructured string.
 

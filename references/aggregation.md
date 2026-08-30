@@ -26,7 +26,7 @@ Return:
 3. unverifiable items that name obtainable missing evidence;
 4. coverage.
 
-Coverage must list target and final snapshot hash; reviewed and skipped perspectives with reasons; task failures/timeouts; requested and actual model/effort; escalation reasons and before/after IDs; examined and excluded paths; unavailable evidence; commands with scope/result; dynamic checks not run; and stale status.
+Coverage must list target and final snapshot hash; reviewed and skipped perspectives with reasons; task failures/timeouts; requested and actual model/effort; escalation reasons and before/after IDs; examined and excluded paths; unavailable evidence; commands with scope/outcome/attribution/reason; dynamic checks not run; and stale status.
 
 Never collapse these states:
 

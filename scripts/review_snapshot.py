@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -11,12 +12,21 @@ import re
 import stat
 import subprocess
 import sys
+import tomllib
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 
-VERSION = 2
+VERSION = 3
 MAX_SCAN_BYTES = 1_000_000
+STABLE_DIFF_CONFIG = [
+    "-c", "core.quotePath=false", "-c", "core.abbrev=40", "-c", "diff.mnemonicPrefix=false",
+    "-c", "diff.noprefix=false", "-c", "diff.srcPrefix=a/", "-c", "diff.dstPrefix=b/",
+]
+STABLE_DIFF_FLAGS = [
+    "--no-ext-diff", "--no-textconv", "--no-color", "--full-index", "--find-renames=50%",
+    "--diff-algorithm=myers", "--no-indent-heuristic",
+]
 
 LANGUAGES = {
     ".c": "c", ".cc": "cpp", ".cpp": "cpp", ".cs": "csharp",
@@ -61,6 +71,21 @@ ROUTE_RULES = {
     "accessibility": re.compile(r"(?i)\b(?:aria-|role=|tabindex|focus|keyboard|screen reader|a11y|<button|<input|<label)\b"),
     "docs-dx": re.compile(r"(?i)\b(?:usage|example|migration guide|command line|cli\b|--help|configuration|error message)\b"),
 }
+
+STRONG_PATH_RULES = {
+    "security": re.compile(r"(?i)(?:^|/)(?:auth(?:entication|orization)?|permissions?|identity|access-control)(?:/|\.|$)|(?:^|/)middleware/auth(?:/|\.|$)"),
+    "data-integrity": re.compile(r"(?i)(?:^|/)(?:migrations?|backfills?)(?:/|$)|(?:^|/)(?:schema|db)/(?:migrations?|backfills?)(?:/|$)"),
+    "compatibility": re.compile(r"(?i)(?:^|/)(?:openapi|swagger)(?:\.|/|$)|\.(?:proto|avsc)$|(?:^|/)(?:public[-_]?)?schemas?(?:/|$)"),
+    "rollout": re.compile(r"(?i)(?:^|/)(?:deploy(?:ment)?|helm|terraform|k8s|kubernetes|\.github/workflows)(?:/|$)|(?:^|/)(?:docker-compose|compose)\.ya?ml$|(?:^|/)Dockerfile$"),
+}
+
+GATE_SCRIPT_NAMES = {
+    "build": "build", "check": "check", "format": "format", "lint": "lint",
+    "test": "test", "typecheck": "type", "type-check": "type",
+    "types": "type", "secret-scan": "secret-scan", "secrets": "secret-scan",
+    "mutation": "mutation", "mutate": "mutation",
+}
+MISE_FILENAMES = ("mise.toml", ".mise.toml")
 
 
 class SnapshotError(RuntimeError):
@@ -254,58 +279,251 @@ def redact_candidates(lines: Iterable[tuple[str, int, str]]) -> list[dict[str, A
 
 def route_candidates(files: list[dict[str, Any]], added: list[tuple[str, int, str]], sensitive: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     candidates: dict[str, list[dict[str, Any]]] = {name: [] for name in (*ROUTE_RULES.keys(), "dependency", "sensitive-data")}
-    seen: dict[str, set[tuple[str, str]]] = {name: set() for name in candidates}
+    seen: dict[str, set[tuple[str, int | None, str, str]]] = {name: set() for name in candidates}
 
-    def add(route: str, path: str, reason: str) -> None:
-        key = (path, reason)
+    def add(
+        route: str, path: str, line: int | None, matched_rule: str, source: str,
+        strength: str, reason: str,
+    ) -> None:
+        key = (path, line, matched_rule, source)
         if key not in seen[route]:
             seen[route].add(key)
-            candidates[route].append({"path": path, "reason": reason})
+            candidates[route].append({
+                "path": path, "line": line, "matched_rule": matched_rule,
+                "source": source, "strength": strength, "reason": reason,
+            })
 
     for item in files:
         path = item["path"]
         roles = item["roles"]
         if "manifest" in roles:
-            add("dependency", path, "dependency manifest or lockfile changed")
-        if "schema" in roles:
-            add("data-integrity", path, "schema or migration candidate changed")
-            add("compatibility", path, "schema/protocol candidate changed")
-        if "deployment" in roles or "configuration" in roles:
-            add("rollout", path, "deployment or configuration candidate changed")
+            add("dependency", path, None, "manifest-path", "file-role", "strong", "dependency manifest or lockfile changed")
+        for route, pattern in STRONG_PATH_RULES.items():
+            if pattern.search(path):
+                add(route, path, None, f"{route}-boundary-path", "path-structure", "strong", "structural boundary path changed")
+        if "configuration" in roles:
+            add("rollout", path, None, "configuration-path", "file-role", "weak", "configuration candidate changed; semantics require classification")
         if "ui" in roles:
-            add("accessibility", path, "UI surface changed")
+            add("accessibility", path, None, "ui-path", "file-role", "strong", "UI surface changed")
         if "documentation" in roles:
-            add("docs-dx", path, "documentation surface changed")
+            add("docs-dx", path, None, "documentation-path", "file-role", "weak", "documentation surface changed; semantics require classification")
         lowered = path.lower()
         if any(token in lowered for token in ("fixture", "snapshot", "log", "export", "telemetry", "example")):
-            add("sensitive-data", path, "sensitive-data-prone artifact changed")
+            add("sensitive-data", path, None, "sensitive-artifact-path", "path-structure", "weak", "sensitive-data-prone artifact changed")
 
-    for path, _, text in added:
+    for path, line, text in added:
         for route, pattern in ROUTE_RULES.items():
             if pattern.search(text):
-                add(route, path, "added text matched deterministic route signal")
+                add(route, path, line, f"{route}-keyword", "content-keyword", "weak", "added text matched a keyword; semantics require classification")
     for item in sensitive:
-        add("sensitive-data", item["path"], f"redacted {item['type']} candidate {item['candidate_id']}")
-    return {name: sorted(items, key=lambda item: (item["path"], item["reason"])) for name, items in sorted(candidates.items())}
+        add("sensitive-data", item["path"], item["line"], "redacted-sensitive-candidate", "sensitive-candidate", "strong", f"redacted {item['type']} candidate {item['candidate_id']}")
+    return {
+        name: sorted(items, key=lambda item: (item["path"], item["line"] is None, item["line"] or 0, item["matched_rule"], item["reason"]))
+        for name, items in sorted(candidates.items())
+    }
 
 
-def configured_gates(root: Path, mode: str, target: dict[str, Any]) -> list[dict[str, str]]:
+def target_blob(root: Path, mode: str, target: dict[str, Any], path: str) -> bytes | None:
+    if mode == "range":
+        return commit_blob(root, target["head"], path)
+    if mode == "staged":
+        return index_blob(root, path)
+    return worktree_blob(root, path)
+
+
+def target_paths(root: Path, mode: str, target: dict[str, Any]) -> list[str]:
+    if mode == "range":
+        raw = git(root, "ls-tree", "-r", "-z", "--name-only", target["head"])
+    elif mode == "staged":
+        raw = git(root, "ls-files", "-z")
+    else:
+        raw = git(root, "ls-files", "-z") + git(root, "ls-files", "--others", "--exclude-standard", "-z")
+    return sorted({repo_relative_path(value.decode("utf-8", "surrogateescape")) for value in raw.split(b"\0") if value})
+
+
+def declared_package_manager(package: dict[str, Any]) -> str | None:
+    declared = package.get("packageManager")
+    if isinstance(declared, str):
+        name = declared.split("@", 1)[0].lower()
+        if name in {"npm", "pnpm", "yarn", "bun"}:
+            return name
+    return None
+
+
+def package_at(root: Path, mode: str, target: dict[str, Any], path: str) -> dict[str, Any] | None:
+    source = target_blob(root, mode, target, path)
+    if source is None:
+        return None
+    try:
+        result = json.loads(source.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return result if isinstance(result, dict) else None
+
+
+def lockfile_manager(root: Path, mode: str, target: dict[str, Any], directory: PurePosixPath) -> str | None:
+    prefix = "" if directory.as_posix() == "." else f"{directory}/"
+    for manager, lockfile in (("pnpm", "pnpm-lock.yaml"), ("yarn", "yarn.lock"), ("bun", "bun.lockb"), ("npm", "package-lock.json")):
+        if target_blob(root, mode, target, prefix + lockfile) is not None:
+            return manager
+    return None
+
+
+def workspace_pattern_matches(path: PurePosixPath, pattern: str) -> bool:
+    """Match workspace glob segments: * is one segment and ** is zero or more."""
+    normalized = PurePosixPath(pattern)
+    if normalized.is_absolute() or ".." in normalized.parts or "\\" in pattern:
+        return False
+    pattern_parts = normalized.parts
+    path_parts = path.parts
+
+    def matches(pattern_index: int, path_index: int) -> bool:
+        if pattern_index == len(pattern_parts):
+            return path_index == len(path_parts)
+        part = pattern_parts[pattern_index]
+        if part == "**":
+            return any(matches(pattern_index + 1, index) for index in range(path_index, len(path_parts) + 1))
+        return (
+            path_index < len(path_parts)
+            and fnmatch.fnmatchcase(path_parts[path_index], part)
+            and matches(pattern_index + 1, path_index + 1)
+        )
+
+    return matches(0, 0)
+
+
+def pnpm_workspace_patterns(source: bytes | None) -> list[str]:
+    """Read the small packages-list subset without treating YAML as executable input."""
+    if source is None:
+        return []
+    try:
+        lines = source.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return []
+    patterns: list[str] = []
+    in_packages = False
+    for raw in lines:
+        stripped = raw.strip()
+        if not in_packages:
+            if re.match(r"^packages\s*:\s*(?:#.*)?$", stripped):
+                in_packages = True
+            continue
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = re.match(r"^-\s+(.+?)\s*(?:#.*)?$", stripped)
+        if not match:
+            # Another YAML mapping key starts a new section.
+            if not raw[:1].isspace() or re.match(r"^[A-Za-z0-9_-]+\s*:", stripped):
+                break
+            continue
+        value = match.group(1).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        if value:
+            patterns.append(value)
+    return patterns
+
+
+def matches_workspace_patterns(relative: PurePosixPath, patterns: list[str]) -> bool:
+    included = False
+    for raw_pattern in patterns:
+        negative = raw_pattern.startswith("!")
+        pattern = raw_pattern[1:] if negative else raw_pattern
+        if workspace_pattern_matches(relative, pattern):
+            included = not negative
+    return included
+
+
+def workspace_member(root: Path, mode: str, target: dict[str, Any], ancestor: PurePosixPath, package_path: str, package: dict[str, Any]) -> bool:
+    workspaces = package.get("workspaces")
+    patterns = workspaces.get("packages") if isinstance(workspaces, dict) else workspaces
+    package_directory = PurePosixPath(package_path).parent
+    try:
+        relative = package_directory.relative_to(ancestor)
+    except ValueError:
+        return False
+    package_patterns = patterns if isinstance(patterns, list) and all(isinstance(pattern, str) for pattern in patterns) else []
+    prefix = "" if ancestor.as_posix() == "." else f"{ancestor}/"
+    pnpm_patterns = pnpm_workspace_patterns(target_blob(root, mode, target, prefix + "pnpm-workspace.yaml"))
+    return matches_workspace_patterns(relative, package_patterns) or matches_workspace_patterns(relative, pnpm_patterns)
+
+
+def package_manager(root: Path, mode: str, target: dict[str, Any], package_path: str, package: dict[str, Any]) -> str:
+    local = declared_package_manager(package)
+    if local:
+        return local
+    local_directory = PurePosixPath(package_path).parent
+    local_lockfile = lockfile_manager(root, mode, target, local_directory)
+    if local_lockfile:
+        return local_lockfile
+    ancestor = local_directory.parent
+    while True:
+        ancestor_path = (ancestor / "package.json").as_posix()
+        ancestor_package = package_at(root, mode, target, ancestor_path)
+        if ancestor_package and workspace_member(root, mode, target, ancestor, package_path, ancestor_package):
+            inherited = declared_package_manager(ancestor_package)
+            if inherited:
+                return inherited
+            inherited_lockfile = lockfile_manager(root, mode, target, ancestor)
+            if inherited_lockfile:
+                return inherited_lockfile
+        if ancestor.as_posix() == ".":
+            break
+        ancestor = ancestor.parent
+    return "npm"
+
+
+def configured_gates(root: Path, mode: str, target: dict[str, Any]) -> list[dict[str, Any]]:
     checks = {
         "secret-scan": [".gitleaks.toml", ".gitleaks.yaml", ".trufflehog.yaml"],
-        "mutation": ["stryker.conf.json", "stryker-config.json", "mutmut_config.py", ".mutmut-config"],
+        "mutation": [
+            "stryker.conf.json", "stryker-config.json", "stryker.conf.js", "stryker.conf.cjs",
+            "stryker.conf.mjs", "stryker.conf.ts", "mutation.config.json", "mutmut_config.py",
+            ".mutmut-config", "mutmut.ini",
+        ],
     }
-    found: list[dict[str, str]] = []
+    found: list[dict[str, Any]] = []
     for gate, paths in checks.items():
         for path in paths:
-            if mode == "range":
-                exists = commit_blob(root, target["head"], path) is not None
-            elif mode == "staged":
-                exists = index_blob(root, path) is not None
-            else:
-                exists = worktree_blob(root, path) is not None
+            exists = target_blob(root, mode, target, path) is not None
             if exists:
                 found.append({"gate": gate, "config": path, "status": "configured-not-run"})
-    return found
+    for package_path in (path for path in target_paths(root, mode, target) if PurePosixPath(path).name == "package.json"):
+        package_blob = target_blob(root, mode, target, package_path)
+        if package_blob is None:
+            continue
+        try:
+            package = json.loads(package_blob.decode("utf-8"))
+            scripts = package.get("scripts", {})
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            scripts = {}
+            package = {}
+        if isinstance(scripts, dict):
+            manager = package_manager(root, mode, target, package_path, package if isinstance(package, dict) else {})
+            for name in sorted(scripts):
+                gate = GATE_SCRIPT_NAMES.get(name.lower().split(":", 1)[0])
+                if gate and isinstance(scripts[name], str):
+                    found.append({
+                        "gate": gate, "config": package_path, "script": name,
+                        "command_argv": [manager, "run", name], "status": "configured-not-run",
+                    })
+    for path in MISE_FILENAMES:
+        source = target_blob(root, mode, target, path)
+        if source is None:
+            continue
+        try:
+            tasks = tomllib.loads(source.decode("utf-8")).get("tasks", {})
+        except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+            tasks = {}
+        if isinstance(tasks, dict):
+            for name in sorted(tasks):
+                gate = GATE_SCRIPT_NAMES.get(name.lower())
+                if gate:
+                    found.append({
+                        "gate": gate, "config": path, "task": name,
+                        "command_argv": ["mise", "run", name], "status": "configured-not-run",
+                    })
+    return sorted(found, key=lambda item: (item["gate"], item["config"], item.get("script", item.get("task", ""))))
 
 
 def commit_blob(root: Path, commit: str, path: str) -> bytes | None:
@@ -437,6 +655,188 @@ def file_record(
     return result
 
 
+def nested_repo_fingerprint(path: Path) -> str:
+    """Hash nested state without emitting nested paths, values, or contents."""
+    head = git_result(path, "rev-parse", "HEAD")
+    status = git_result(path, "status", "--porcelain=v2", "-z", "--untracked-files=all")
+    material = b"HEAD\0" + (head.stdout if head.returncode == 0 else b"unborn")
+    material += b"\0DIRTY\0" + (b"1" if status.stdout else b"0")
+    # Index identity is separate from worktree identity, including unborn repos.
+    material += b"\0INDEX\0" + sha256(git_result(path, "ls-files", "-s", "-z").stdout).encode("ascii")
+    # Resolve changed tracked paths through Git, then hash only bounded working
+    # content. Path bytes remain inside the final one-way fingerprint.
+    tracked_paths = {
+        item for item in git_result(path, "ls-files", "-z").stdout.split(b"\0") if item
+    }
+    if head.returncode == 0:
+        changed = sorted(item for item in git_result(path, "diff", "--name-only", "-z", "HEAD", "--").stdout.split(b"\0") if item)
+    else:
+        changed = sorted(tracked_paths)
+    tracked_material = bytearray()
+    for encoded_path in changed:
+        candidate = path / encoded_path.decode("utf-8", "surrogateescape")
+        try:
+            metadata = candidate.lstat()
+        except OSError:
+            tracked_material.extend(b"deleted\0" + encoded_path)
+            continue
+        if stat.S_ISLNK(metadata.st_mode):
+            tracked_material.extend(b"symlink\0" + encoded_path + b"\0" + sha256(os.readlink(candidate).encode("utf-8", "surrogateescape")).encode("ascii"))
+        elif stat.S_ISREG(metadata.st_mode):
+            tracked_material.extend(b"file\0" + encoded_path + b"\0" + hash_file(candidate).encode("ascii"))
+        else:
+            tracked_material.extend(b"bounded\0" + encoded_path + b"\0" + str(metadata.st_size).encode("ascii"))
+    material += b"\0TRACKED\0" + sha256(bytes(tracked_material)).encode("ascii")
+    untracked = sorted(item for item in git_result(path, "ls-files", "--others", "--exclude-standard", "-z").stdout.split(b"\0") if item)
+    untracked_material = bytearray()
+    for encoded_path in untracked:
+        candidate = path / encoded_path.decode("utf-8", "surrogateescape")
+        try:
+            metadata = candidate.lstat()
+        except OSError:
+            untracked_material.extend(b"missing\0" + sha256(encoded_path).encode("ascii"))
+            continue
+        if stat.S_ISLNK(metadata.st_mode):
+            untracked_material.extend(b"symlink\0" + encoded_path + b"\0" + sha256(os.readlink(candidate).encode("utf-8", "surrogateescape")).encode("ascii"))
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            untracked_material.extend(b"special\0" + sha256(encoded_path + str(metadata.st_mode).encode()).encode("ascii"))
+            continue
+        untracked_material.extend(b"file\0" + encoded_path + b"\0" + hash_file(candidate).encode("ascii"))
+    material += b"\0UNTRACKED\0" + sha256(bytes(untracked_material)).encode("ascii")
+    return sha256(material)
+
+
+def scope_gap(path: str, kind: str, reason: str, fingerprint: str | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {"path": path, "kind": kind, "reason": reason}
+    if fingerprint is not None:
+        result["fingerprint"] = fingerprint
+    return result
+
+
+def working_scope(root: Path) -> tuple[list[dict[str, str]], list[dict[str, Any]], list[tuple[str, int, str]], bytes]:
+    """Return includable untracked files and explicit boundaries left outside review."""
+    raw = git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    paths = sorted({
+        repo_relative_path(item[3:].decode("utf-8", "surrogateescape"))
+        for item in raw.split(b"\0") if item.startswith(b"?? ")
+    })
+    records: list[dict[str, str]] = []
+    gaps: list[dict[str, Any]] = []
+    added: list[tuple[str, int, str]] = []
+    identity = b""
+    seen_directories: set[str] = set()
+    seen_gaps: set[tuple[str, str]] = set()
+    tracked = {
+        repo_relative_path(item.decode("utf-8", "surrogateescape"))
+        for item in git(root, "ls-files", "-z").split(b"\0") if item
+    }
+    tracked_directories = {
+        parent.as_posix()
+        for tracked_path in tracked
+        for parent in PurePosixPath(tracked_path).parents
+        if parent.as_posix() != "."
+    }
+
+    def add_gap(item: dict[str, Any]) -> None:
+        key = (item["path"], item["kind"])
+        if key not in seen_gaps:
+            seen_gaps.add(key)
+            gaps.append(item)
+
+    for path in paths:
+        absolute = root / path
+        try:
+            metadata = absolute.lstat()
+        except FileNotFoundError:
+            # A concurrent filesystem change must make verification stale, not disappear silently.
+            add_gap(scope_gap(path, "unreadable-entry", "untracked entry disappeared during capture"))
+            continue
+        if stat.S_ISDIR(metadata.st_mode):
+            if (absolute / ".git").exists():
+                fingerprint = nested_repo_fingerprint(absolute)
+                add_gap(scope_gap(path.rstrip("/"), "nested-git-repository", "nested repository is a review boundary; contents were not recursively included", fingerprint))
+                identity += b"\0NESTED\0" + path.encode("utf-8", "surrogateescape") + b"\0" + fingerprint.encode("ascii")
+            else:
+                add_gap(scope_gap(path.rstrip("/"), "untracked-directory", "untracked directory boundary is not a full-repository audit"))
+            continue
+        if stat.S_ISLNK(metadata.st_mode):
+            # Hashing link text catches changes while avoiding an emitted target or target contents.
+            try:
+                target_hash = sha256(os.readlink(absolute).encode("utf-8", "surrogateescape"))
+            except OSError:
+                target_hash = sha256(b"unreadable")
+            add_gap(scope_gap(path, "untracked-symlink", "symlink target contents were not followed", target_hash))
+            identity += b"\0SYMLINK\0" + path.encode("utf-8", "surrogateescape") + b"\0" + target_hash.encode("ascii")
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            add_gap(scope_gap(path, "special-entry", "non-regular filesystem entry was not read"))
+            identity += b"\0SPECIAL\0" + path.encode("utf-8", "surrogateescape") + b"\0" + str(stat.S_IFMT(metadata.st_mode)).encode("ascii")
+            continue
+        for parent in PurePosixPath(path).parents:
+            parent_text = parent.as_posix()
+            if parent_text == "." or parent_text in seen_directories:
+                continue
+            seen_directories.add(parent_text)
+            parent_absolute = root / parent_text
+            if parent_absolute.is_dir() and not (parent_absolute / ".git").exists():
+                add_gap(scope_gap(parent_text, "untracked-directory", "untracked directory boundary contains included regular files but is not independently tracked"))
+        records.append({"status": "U", "path": path})
+        content_hash = hash_file(absolute)
+        identity += b"\0UNTRACKED\0" + path.encode("utf-8", "surrogateescape") + b"\0" + content_hash.encode("ascii")
+        if metadata.st_size > MAX_SCAN_BYTES:
+            add_gap(scope_gap(path, "scan-size-exceeded", f"untracked regular file exceeds deterministic scan limit of {MAX_SCAN_BYTES} bytes", content_hash))
+            continue
+        text = absolute.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
+        added.extend((path, index, value) for index, value in enumerate(lines, 1))
+
+    # Git does not surface empty directories or every special entry. This bounded
+    # filesystem pass checks ignore rules *before* descending, so ignored trees
+    # (for example node_modules) are never scanned.
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        for entry in sorted(os.scandir(directory), key=lambda item: item.name):
+            if entry.name == ".git":
+                continue
+            relative = entry.path[len(str(root)) + 1:].replace(os.sep, "/")
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISDIR(metadata.st_mode):
+                ignored = git_result(root, "check-ignore", "-q", "--", relative + "/").returncode == 0
+                if ignored:
+                    continue
+                if (Path(entry.path) / ".git").exists():
+                    continue
+                if relative not in tracked_directories:
+                    # This is the highest untracked boundary. Do not recurse: Git
+                    # already enumerated regular files, while descendants would
+                    # only duplicate the same coverage limitation.
+                    add_gap(scope_gap(relative, "untracked-directory", "empty or otherwise untracked directory boundary is not a full-repository audit"))
+                    continue
+                pending.append(Path(entry.path))
+                continue
+            if relative in tracked or relative in paths:
+                continue
+            ignored = git_result(root, "check-ignore", "-q", "--", relative).returncode == 0
+            if ignored:
+                continue
+            if stat.S_ISLNK(metadata.st_mode):
+                try:
+                    target_hash = sha256(os.readlink(entry.path).encode("utf-8", "surrogateescape"))
+                except OSError:
+                    target_hash = sha256(b"unreadable")
+                add_gap(scope_gap(relative, "untracked-symlink", "symlink target contents were not followed", target_hash))
+                identity += b"\0SYMLINK\0" + relative.encode("utf-8", "surrogateescape") + b"\0" + target_hash.encode("ascii")
+            elif not stat.S_ISREG(metadata.st_mode):
+                add_gap(scope_gap(relative, "special-entry", "non-regular filesystem entry was not read"))
+                identity += b"\0SPECIAL\0" + relative.encode("utf-8", "surrogateescape") + b"\0" + str(stat.S_IFMT(metadata.st_mode)).encode("ascii")
+    return records, sorted(gaps, key=lambda item: (item["path"], item["kind"])), added, identity
+
+
 def snapshot_identity(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema_version": snapshot["schema_version"],
@@ -447,6 +847,8 @@ def snapshot_identity(snapshot: dict[str, Any]) -> dict[str, Any]:
         "route_candidates": snapshot["route_candidates"],
         "sensitive_candidates": snapshot["sensitive_candidates"],
         "configured_gates": snapshot["configured_gates"],
+        "scope_status": snapshot["scope_status"],
+        "scope_gaps": snapshot["scope_gaps"],
     }
 
 
@@ -458,18 +860,18 @@ def build_snapshot(root_arg: str, mode: str, base: str | None, head: str | None,
     if mode in {"working", "staged"}:
         captured_base = git(root, "rev-parse", f"{base or current_git_head}^{{commit}}").decode().strip()
         cached = mode == "staged"
-        diff_args = ["-c", "core.quotePath=false", "diff"]
+        diff_args = [*STABLE_DIFF_CONFIG, "diff"]
         if cached:
             diff_args.append("--cached")
-        diff_args.extend(["--no-ext-diff", "--binary", "--find-renames", captured_base, "--"])
-        status_args = ["diff"]
+        diff_args.extend([*STABLE_DIFF_FLAGS, "--binary", captured_base, "--"])
+        status_args = [*STABLE_DIFF_CONFIG, "diff"]
         if cached:
             status_args.append("--cached")
-        status_args.extend(["--name-status", "-z", "--find-renames", captured_base, "--"])
-        line_args = ["-c", "core.quotePath=false", "diff"]
+        status_args.extend([*STABLE_DIFF_FLAGS, "--name-status", "-z", captured_base, "--"])
+        line_args = [*STABLE_DIFF_CONFIG, "diff"]
         if cached:
             line_args.append("--cached")
-        line_args.extend(["--no-ext-diff", "--find-renames", "--unified=0", captured_base, "--"])
+        line_args.extend([*STABLE_DIFF_FLAGS, "--unified=0", captured_base, "--"])
         target.update({"base": captured_base, "head": "INDEX" if cached else "WORKTREE"})
     else:
         if not base or not head:
@@ -478,9 +880,9 @@ def build_snapshot(root_arg: str, mode: str, base: str | None, head: str | None,
         resolved_head = git(root, "rev-parse", f"{head}^{{commit}}").decode().strip()
         comparison_base = git(root, "merge-base", source_base, resolved_head).decode().strip() if use_merge_base else source_base
         spec = f"{comparison_base}..{resolved_head}"
-        diff_args = ["-c", "core.quotePath=false", "diff", "--no-ext-diff", "--binary", "--find-renames", spec, "--"]
-        status_args = ["diff", "--name-status", "-z", "--find-renames", spec, "--"]
-        line_args = ["-c", "core.quotePath=false", "diff", "--no-ext-diff", "--find-renames", "--unified=0", spec, "--"]
+        diff_args = [*STABLE_DIFF_CONFIG, "diff", *STABLE_DIFF_FLAGS, "--binary", spec, "--"]
+        status_args = [*STABLE_DIFF_CONFIG, "diff", *STABLE_DIFF_FLAGS, "--name-status", "-z", spec, "--"]
+        line_args = [*STABLE_DIFF_CONFIG, "diff", *STABLE_DIFF_FLAGS, "--unified=0", spec, "--"]
         target.update({
             "source_base": source_base,
             "base": comparison_base,
@@ -494,25 +896,50 @@ def build_snapshot(root_arg: str, mode: str, base: str | None, head: str | None,
     records = parse_name_status(git(root, *status_args))
     ranges, added = parse_line_changes(line_patch)
 
+    scope_gaps: list[dict[str, Any]] = []
     if mode == "working":
-        untracked_raw = git(root, "ls-files", "--others", "--exclude-standard", "-z")
-        for raw_path in untracked_raw.split(b"\0"):
-            if not raw_path:
-                continue
-            path = repo_relative_path(raw_path.decode("utf-8", "surrogateescape"))
-            absolute = root / path
-            if not absolute.is_file() or absolute.is_symlink():
-                continue
-            records.append({"status": "U", "path": path})
-            identity_material += b"\0UNTRACKED\0" + raw_path + b"\0" + hash_file(absolute).encode()
-            if absolute.stat().st_size <= MAX_SCAN_BYTES:
-                text = absolute.read_text(encoding="utf-8", errors="replace")
-                untracked_lines = [(path, index, value) for index, value in enumerate(text.splitlines(), 1)]
-                added.extend(untracked_lines)
-                ranges.setdefault(path, {"old": [], "new": []})["new"].extend(index for _, index, _ in untracked_lines)
+        untracked_records, untracked_gaps, untracked_lines, untracked_identity = working_scope(root)
+        records.extend(untracked_records)
+        scope_gaps.extend(untracked_gaps)
+        identity_material += untracked_identity
+        added.extend(untracked_lines)
+        for path, index, _ in untracked_lines:
+            ranges.setdefault(path, {"old": [], "new": []})["new"].append(index)
 
     records = sorted(records, key=lambda item: (item["path"], item["status"], item.get("old_path", "")))
     files = [file_record(root, record, ranges, mode, target) for record in records]
+    working_gitlink_fingerprints: dict[str, str] = {}
+    if mode == "working":
+        for item in files:
+            if "160000" not in {item["old"].get("mode"), item["new"].get("mode")}:
+                continue
+            candidate = root / item["path"]
+            if candidate.is_dir() and (candidate / ".git").exists():
+                fingerprint = nested_repo_fingerprint(candidate)
+                working_gitlink_fingerprints[item["path"]] = fingerprint
+                identity_material += b"\0GITLINK-WORKTREE\0" + item["path"].encode("utf-8", "surrogateescape") + b"\0" + fingerprint.encode("ascii")
+    for item in files:
+        if "large-file" in item["evidence_exclusions"]:
+            scope_gaps.append(scope_gap(
+                item["path"], "scan-size-exceeded",
+                f"changed file exceeds deterministic scan limit of {MAX_SCAN_BYTES} bytes",
+                item["new"]["content_sha256"] or item["old"]["content_sha256"],
+            ))
+        modes = {item["old"].get("mode"), item["new"].get("mode")}
+        if "120000" in modes:
+            scope_gaps.append(scope_gap(
+                item["path"], "tracked-symlink",
+                "tracked symlink target contents were not followed",
+                item["new"].get("content_sha256") or item["old"].get("content_sha256"),
+            ))
+        if "160000" in modes:
+            fingerprint = working_gitlink_fingerprints.get(item["path"])
+            scope_gaps.append(scope_gap(
+                item["path"], "gitlink",
+                "gitlink/submodule contents were not recursively reviewed",
+                fingerprint,
+            ))
+    scope_gaps = sorted({(item["path"], item["kind"]): item for item in scope_gaps}.values(), key=lambda item: (item["path"], item["kind"]))
     sensitive = redact_candidates(added)
     routes = route_candidates(files, added, sensitive)
     gates = configured_gates(root, mode, target)
@@ -527,6 +954,8 @@ def build_snapshot(root_arg: str, mode: str, base: str | None, head: str | None,
         "route_candidates": routes,
         "sensitive_candidates": sensitive,
         "configured_gates": gates,
+        "scope_status": "complete" if not scope_gaps else "blocked",
+        "scope_gaps": scope_gaps,
     }
     snapshot["snapshot_hash"] = canonical_hash(snapshot_identity(snapshot))
     return snapshot

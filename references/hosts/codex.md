@@ -8,5 +8,6 @@ Keep orchestration in the root/main agent. Use the available collaboration subag
 - Wait for terminal messages without forwarding reviewer findings to still-running or later-wave initial reviewers.
 - Repository `AGENTS.md` files remain applicable evidence/instructions according to Codex precedence. Include relevant task constraints explicitly because a subagent may not share all transient main-context discoveries.
 - Do not use user-owned Codex threads for internal reviewers; use ephemeral subagents.
+- The main agent records each selected role, requested/actual model and effort (or `not_exposed`), host task ID, attempt, timeout, terminal status, retry/escalation reason, and schema-validation result in the shared [execution ledger](../execution-ledger.md). Do not ask reviewers to report these values.
 
 If delegation is unavailable, report that independent-review execution is not evaluated. Do not impersonate multiple reviewers sequentially in the main context and call it equivalent.

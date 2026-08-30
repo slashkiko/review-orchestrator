@@ -7,6 +7,7 @@ Keep orchestration in the main Claude Code context and use the Agent/subagent fa
 - Give each Agent the complete reviewer envelope because subagent context is isolated. Explicitly include applicable repository `CLAUDE.md`, `AGENTS.md`, and task constraints not guaranteed to preload.
 - Do not pass previous findings into later initial-review waves.
 - Wait for all reviewer tasks before creating the validator Agent.
+- The main context records each Agent's requested/actual model and effort (or `not_exposed`), host task ID, attempts, timeout, terminal status, retry/escalation reason, and schema-validation result in the shared [execution ledger](../execution-ledger.md). Reviewers do not self-report this data.
 
 Codex-only `agents/openai.yaml` is inert metadata for Claude Code; the portable behavior is defined by `SKILL.md` and `references/`. If the installed Claude version rejects unknown ancillary files, discovery through the directory symlink must still target `SKILL.md`; do not fork the shared instructions.
 

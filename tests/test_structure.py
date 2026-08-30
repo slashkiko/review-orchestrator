@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import stat
 import unittest
 from pathlib import Path
 
@@ -35,6 +36,11 @@ class StructureTest(unittest.TestCase):
         adapters = SKILL / "references" / "hosts"
         self.assertTrue((adapters / "codex.md").is_file())
         self.assertTrue((adapters / "claude-code.md").is_file())
+
+    def test_documented_direct_scripts_are_executable(self) -> None:
+        for name in ("route_selection.py", "validate_execution_ledger.py"):
+            mode = (SKILL / "scripts" / name).stat().st_mode
+            self.assertTrue(mode & stat.S_IXUSR, name)
 
 
 if __name__ == "__main__":

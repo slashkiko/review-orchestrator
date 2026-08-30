@@ -1,0 +1,13 @@
+# Claude Code host adapter
+
+Keep orchestration in the main Claude Code context and use the Agent/subagent facility for one task per selected reviewer and later one validator task. Claude subagents must not be asked to spawn other agents.
+
+- Discover available concurrency; dispatch independent tasks concurrently up to that limit and preserve later envelopes unchanged across waves.
+- Map `fast`, `balanced`, and `deep` using [../model-policy.md](../model-policy.md). Omit an effort field when the chosen model/runtime does not support it and record that omission.
+- Give each Agent the complete reviewer envelope because subagent context is isolated. Explicitly include applicable repository `CLAUDE.md`, `AGENTS.md`, and task constraints not guaranteed to preload.
+- Do not pass previous findings into later initial-review waves.
+- Wait for all reviewer tasks before creating the validator Agent.
+
+Codex-only `agents/openai.yaml` is inert metadata for Claude Code; the portable behavior is defined by `SKILL.md` and `references/`. If the installed Claude version rejects unknown ancillary files, discovery through the directory symlink must still target `SKILL.md`; do not fork the shared instructions.
+
+If the Agent facility cannot run, report the review as not evaluated rather than simulating independent contexts in the main session.

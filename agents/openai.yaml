@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Orchestrator"
+  short_description: "Parallel evidence-backed specialist code review"
+  default_prompt: "Use $review-orchestrator to review this change with the necessary independent specialist perspectives."

@@ -23,6 +23,9 @@ Review one immutable change snapshot through independent perspectives and return
 - Read only the selected files under [references/reviewers/](references/reviewers/); all three always-on definitions must be read.
 - Read [references/integrations/prepare-repo-public.md](references/integrations/prepare-repo-public.md) when public release, open-sourcing, or repository visibility is in scope.
 - Existing configured build, type, lint, test, secret-scan, or mutation commands are inventory only until allowed by both an exact user command or host/skill allowlist and the target-boundary inventory. Record `passed|failed|blocked|not_run`, attribution (`diff|preexisting|environment|unknown`), and reason. Never install a missing tool or treat an unrun check as passed.
+- For a requested gate execution, read [references/gate-runner.md](references/gate-runner.md). Immediately before execution, obtain an exact target-bound approval artifact; repository scripts are never authorization. `scripts/run_gates.py` is dry-run by default and must be invoked once with `--execute` only after that authorization boundary.
+- For a blocked scope, read [references/scope-qualification.md](references/scope-qualification.md). Only actual user approval can qualify every exact gap; qualification does not make a full-repository or full-coverage claim possible.
+- Read [references/routing-evaluation.md](references/routing-evaluation.md) when changing routing rules or model tiers. Read [references/host-e2e.md](references/host-e2e.md) when running a real Codex/Claude Code smoke; unit tests never invoke either CLI.
 
 ## Hard boundaries
 

@@ -1,0 +1,11 @@
+{"schema_version":1,"cases":[
+{"name":"auth-boundary","files":[{"path":"auth/login.py","roles":[]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":["security"],"expected_strong":["security"]},
+{"name":"migration","files":[{"path":"db/migrations/01.sql","roles":["schema"]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":["data-integrity"],"expected_strong":["data-integrity"]},
+{"name":"reliability-path","files":[{"path":"worker.py","roles":[]}],"added_lines":[["worker.py",1,"retry timeout"]],"sensitive_candidates":[],"classifier":["reliability"],"expected_high_risk":["reliability"],"expected_strong":[]},
+{"name":"deploy-and-schema-compound","files":[{"path":"deploy/app.yaml","roles":["deployment","configuration"]},{"path":"public/schema.proto","roles":["schema"]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":["rollout"],"expected_strong":["rollout","compatibility"]},
+{"name":"dependency","files":[{"path":"package.json","roles":["manifest"]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":[],"expected_strong":["dependency"]},
+{"name":"ui","files":[{"path":"ui/form.tsx","roles":["ui"]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":[],"expected_strong":["accessibility"]},
+{"name":"yaml-weak-classifier-extra","files":[{"path":"notes.yaml","roles":["configuration"]}],"added_lines":[["notes.yaml",1,"auth retry documentation"]],"sensitive_candidates":[],"classifier":["security","reliability","rollout","docs-dx"],"expected_high_risk":["security","reliability","rollout"],"expected_strong":[]},
+{"name":"strong-false-positive","files":[{"path":"auth/fixture.txt","roles":[]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":[],"expected_strong":[]},
+{"name":"classifier-failure","files":[{"path":"readme.md","roles":["documentation"]}],"added_lines":[["readme.md",1,"security rollout"]],"sensitive_candidates":[],"classifier":null,"expected_high_risk":["rollout"],"expected_strong":[]}
+]}

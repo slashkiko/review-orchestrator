@@ -194,6 +194,8 @@ def snapshot_identity_hash(snapshot: dict[str, Any]) -> str | None:
             "scope_status": snapshot["scope_status"],
             "scope_gaps": snapshot["scope_gaps"],
         }
+        if "repository_binding" in snapshot:
+            identity["repository_binding"] = snapshot["repository_binding"]
     except KeyError:
         return None
     encoded = json.dumps(identity, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -498,7 +500,7 @@ def canonical_finding(finding: dict[str, Any]) -> str:
 
 def validate(snapshot: dict[str, Any], result: Any) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
-    if snapshot.get("schema_version") != 3:
+    if snapshot.get("schema_version") not in {3, 4}:
         errors.append("snapshot schema version is unsupported")
     calculated_snapshot_hash = snapshot_identity_hash(snapshot)
     if calculated_snapshot_hash is None or calculated_snapshot_hash != snapshot.get("snapshot_hash"):

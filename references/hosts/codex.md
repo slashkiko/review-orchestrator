@@ -11,3 +11,5 @@ Keep orchestration in the root/main agent. Use the available collaboration subag
 - The main agent records each selected role, requested/actual model and effort (or `not_exposed`), host task ID, attempt, timeout, terminal status, retry/escalation reason, and schema-validation result in the shared [execution ledger](../execution-ledger.md). Do not ask reviewers to report these values.
 
 If delegation is unavailable, report that independent-review execution is not evaluated. Do not impersonate multiple reviewers sequentially in the main context and call it equivalent.
+
+For a real smoke, use the shared [cross-host E2E contract](../host-e2e.md). This adapter supplies Codex-specific CLI/agent invocation only; snapshot, routing, ledger, gate, and qualification schemas remain shared. Mark an unavailable Codex CLI `unavailable` rather than storing raw output.

@@ -38,7 +38,11 @@ class StructureTest(unittest.TestCase):
         self.assertTrue((adapters / "claude-code.md").is_file())
 
     def test_documented_direct_scripts_are_executable(self) -> None:
-        for name in ("route_selection.py", "validate_execution_ledger.py"):
+        for name in (
+            "review_snapshot.py", "route_selection.py", "validate_findings.py",
+            "validate_execution_ledger.py", "run_gates.py", "qualify_scope.py",
+            "evaluate_routing_corpus.py", "run_host_smoke.py", "validate_host_e2e.py",
+        ):
             mode = (SKILL / "scripts" / name).stat().st_mode
             self.assertTrue(mode & stat.S_IXUSR, name)
 

@@ -1,0 +1,5 @@
+# Routing evaluation
+
+`fixtures/routing-corpus.json` is a maintained, independently labeled deterministic corpus of raw changed-file roles, added lines, and redacted candidates. Run `scripts/evaluate_routing_corpus.py --corpus fixtures/routing-corpus.json` after routing changes. It calls the production `review_snapshot.route_candidates` extractor and selection policy; the corpus includes compound changes, weak classifier extras, classifier failure, and a structural false-positive label.
+
+High-risk recall is expected high-risk routes caught divided by expected high-risk routes; it must be `1.0`. Conditional precision is expected auto-selected strong routes divided by all auto-selected strong routes; it must be at least `0.8`. A zero denominator fails rather than passing by convention. These are deterministic candidate/selection metrics, not an LLM classifier-quality measurement; `host_e2e_classifier_metric` remains separately `not_run` until a real host E2E is recorded. Do not lower model tier based on this corpus alone.

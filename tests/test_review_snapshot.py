@@ -474,7 +474,7 @@ class ReviewSnapshotTest(unittest.TestCase):
 
         self.assertEqual([], first["configured_gates"])
         self.assertEqual(first["configured_gates"], second["configured_gates"])
-        self.assertEqual(first["snapshot_hash"], second["snapshot_hash"])
+        self.assertNotEqual(first["snapshot_hash"], second["snapshot_hash"])
 
     def test_configured_gates_use_index_for_staged_and_worktree_for_working(self) -> None:
         config = self.repo / ".gitleaks.toml"
@@ -485,10 +485,11 @@ class ReviewSnapshotTest(unittest.TestCase):
         staged = self.create_snapshot("gate-staged.json", "--mode", "staged")
         working = self.create_snapshot("gate-working.json", "--mode", "working")
 
-        self.assertEqual(
-            [{"config": ".gitleaks.toml", "gate": "secret-scan", "status": "configured-not-run"}],
-            staged["configured_gates"],
-        )
+        self.assertEqual(1, len(staged["configured_gates"]))
+        self.assertEqual(".gitleaks.toml", staged["configured_gates"][0]["config"])
+        self.assertEqual("secret-scan", staged["configured_gates"][0]["gate"])
+        self.assertEqual("configured-not-run", staged["configured_gates"][0]["status"])
+        self.assertRegex(staged["configured_gates"][0]["gate_id"], r"^[0-9a-f]{64}$")
         self.assertEqual([], working["configured_gates"])
 
     def test_range_hashes_committed_head_not_current_worktree(self) -> None:

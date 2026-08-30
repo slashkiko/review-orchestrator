@@ -36,6 +36,7 @@ def select_routes(
         for role in sorted(weak - HIGH_IMPACT_WEAK):
             not_evaluated[role] = "routing_classifier_failed"
     return {
+        "schema_version": 1,
         "selected": sorted(selected), "not_evaluated": not_evaluated,
         "strong_routes": sorted(strong), "weak_routes": sorted(weak),
     }
@@ -62,6 +63,9 @@ def main() -> int:
                 raise ValueError("classifier result must have status completed and string selected array")
             classifier_selected = set(result["selected"])
         output = select_routes(candidates, classifier_selected)
+        output["snapshot_hash"] = snapshot.get("snapshot_hash")
+        output["classifier_status"] = "failed" if classifier_selected is None else "completed"
+        output["classifier_selected"] = None if classifier_selected is None else sorted(classifier_selected)
         encoded = json.dumps(output, indent=2, sort_keys=True) + "\n"
         if args.output == "-":
             sys.stdout.write(encoded)

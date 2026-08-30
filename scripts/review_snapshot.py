@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 
-VERSION = 3
+VERSION = 4
 MAX_SCAN_BYTES = 1_000_000
 STABLE_DIFF_CONFIG = [
     "-c", "core.quotePath=false", "-c", "core.abbrev=40", "-c", "diff.mnemonicPrefix=false",
@@ -116,6 +116,14 @@ def sha256(data: bytes) -> str:
 def canonical_hash(value: Any) -> str:
     encoded = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return sha256(encoded)
+
+
+def repository_binding(root: Path) -> str:
+    """Opaque checkout binding; never emit the underlying local paths."""
+    common = git(root, "rev-parse", "--git-common-dir").decode().strip()
+    common_path = (root / common).resolve() if not Path(common).is_absolute() else Path(common).resolve()
+    root_stat, common_stat = root.stat(), common_path.stat()
+    return sha256(f"{root_stat.st_dev}:{root_stat.st_ino}:{common_stat.st_dev}:{common_stat.st_ino}".encode())
 
 
 def hash_file(path: Path) -> str:
@@ -505,6 +513,7 @@ def configured_gates(root: Path, mode: str, target: dict[str, Any]) -> list[dict
                 if gate and isinstance(scripts[name], str):
                     found.append({
                         "gate": gate, "config": package_path, "script": name,
+                        "cwd": PurePosixPath(package_path).parent.as_posix(),
                         "command_argv": [manager, "run", name], "status": "configured-not-run",
                     })
     for path in MISE_FILENAMES:
@@ -521,8 +530,17 @@ def configured_gates(root: Path, mode: str, target: dict[str, Any]) -> list[dict
                 if gate:
                     found.append({
                         "gate": gate, "config": path, "task": name,
-                        "command_argv": ["mise", "run", name], "status": "configured-not-run",
+                        "cwd": ".", "command_argv": ["mise", "run", name], "status": "configured-not-run",
                     })
+    for item in found:
+        # The ID is target-bound through the snapshot identity and binds approval
+        # to the exact executable argv rather than a mutable script name alone.
+        item["gate_id"] = canonical_hash({
+            "gate": item["gate"], "config": item["config"],
+            "script": item.get("script"), "task": item.get("task"),
+            "cwd": item.get("cwd"),
+            "command_argv": item.get("command_argv"),
+        })
     return sorted(found, key=lambda item: (item["gate"], item["config"], item.get("script", item.get("task", ""))))
 
 
@@ -838,7 +856,7 @@ def working_scope(root: Path) -> tuple[list[dict[str, str]], list[dict[str, Any]
 
 
 def snapshot_identity(snapshot: dict[str, Any]) -> dict[str, Any]:
-    return {
+    identity = {
         "schema_version": snapshot["schema_version"],
         "target": snapshot["target"],
         "diff_sha256": snapshot["diff_sha256"],
@@ -850,6 +868,10 @@ def snapshot_identity(snapshot: dict[str, Any]) -> dict[str, Any]:
         "scope_status": snapshot["scope_status"],
         "scope_gaps": snapshot["scope_gaps"],
     }
+    # v1.1 snapshots remain structurally verifiable but cannot authorize v1.2 execution.
+    if "repository_binding" in snapshot:
+        identity["repository_binding"] = snapshot["repository_binding"]
+    return identity
 
 
 def build_snapshot(root_arg: str, mode: str, base: str | None, head: str | None, use_merge_base: bool) -> dict[str, Any]:
@@ -946,6 +968,7 @@ def build_snapshot(root_arg: str, mode: str, base: str | None, head: str | None,
     snapshot: dict[str, Any] = {
         "schema_version": VERSION,
         "repository_root": str(root),
+        "repository_binding": repository_binding(root),
         "target": target,
         "git_head_at_capture": current_git_head,
         "diff_sha256": sha256(identity_material),

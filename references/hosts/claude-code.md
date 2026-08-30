@@ -12,3 +12,5 @@ Keep orchestration in the main Claude Code context and use the Agent/subagent fa
 Codex-only `agents/openai.yaml` is inert metadata for Claude Code; the portable behavior is defined by `SKILL.md` and `references/`. If the installed Claude version rejects unknown ancillary files, discovery through the directory symlink must still target `SKILL.md`; do not fork the shared instructions.
 
 If the Agent facility cannot run, report the review as not evaluated rather than simulating independent contexts in the main session.
+
+For a real smoke, use the shared [cross-host E2E contract](../host-e2e.md). This adapter supplies Claude Code-specific CLI/Agent invocation only; snapshot, routing, ledger, gate, and qualification schemas remain shared. Mark an unavailable Claude CLI `unavailable` rather than storing raw output.

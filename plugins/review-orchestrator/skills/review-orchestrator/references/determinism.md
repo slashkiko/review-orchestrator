@@ -11,7 +11,7 @@ Do not ask a model to rediscover a fact in the deterministic column. Do not pres
 | Deterministic | finding schema, enum/hash/location/evidence checks, exact duplicate removal, task/timeout status, stale verification | validated JSON and coverage facts |
 | Hybrid | change map | mechanical symbol/path candidates first; LLM expands implicit contracts, paired operations, and downstream meaning |
 | Hybrid | reviewer routing | path/file/keyword candidates first; a fast classifier decides only genuinely ambiguous relevance |
-| LLM | semantic, simplification, test-effectiveness, and specialist reviews | causal and contextual claims under one reviewer contract |
+| LLM | semantic, simplification, convention, comment-integrity, test-effectiveness, and specialist reviews | causal and contextual claims under one reviewer contract |
 | Hybrid | aggregation | mechanical validity first; validator subagent decides shared cause, reachability, impact, confidence, and material conflict |
 | Hybrid | coverage | execution facts are mechanical; LLM may summarize residual risk without changing those facts |
 

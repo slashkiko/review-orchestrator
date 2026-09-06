@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 
-CORE_ROLES = {"semantic-core", "simplify", "test-effectiveness"}
+CORE_ROLES = {"semantic-core", "simplify", "convention", "test-effectiveness", "comment-integrity"}
 HIGH_IMPACT_WEAK = {"security", "data-integrity", "reliability", "rollout"}
 
 

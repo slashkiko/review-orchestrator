@@ -70,6 +70,10 @@ ROUTE_RULES = {
     "performance": re.compile(r"(?i)\b(?:select\b|join\b|query|batch|render|cache|paginate|n\+1|allocation|hot path)\b"),
     "accessibility": re.compile(r"(?i)\b(?:aria-|role=|tabindex|focus|keyboard|screen reader|a11y|<button|<input|<label)\b"),
     "docs-dx": re.compile(r"(?i)\b(?:usage|example|migration guide|command line|cli\b|--help|configuration|error message)\b"),
+    "ci-workflow": re.compile(r"(?i)(?:\bpull_request_target\b|\bworkflow_run\b|\bself-hosted\b|\bGITHUB_TOKEN\b|\bactions/checkout\b|\bpermissions:|\bsecrets\.[A-Za-z_])"),
+    "deprecation": re.compile(r"(?i)\b(?:deprecat\w*|obsolete|superseded|sunset|legacy)\b"),
+    "localization": re.compile(r"(?i)(?:\bgettext\b|\bxgettext\b|\bi18n\b|\buseTranslation\b|\bformatMessage\b|\btoLocaleString\b|\bpluraliz\w*|\bIntl\.)"),
+    "cost": re.compile(r"(?i)\b(?:quota|billing|pricing|max_tokens|throttl\w*|rate limit|egress)\b"),
 }
 
 STRONG_PATH_RULES = {
@@ -77,6 +81,8 @@ STRONG_PATH_RULES = {
     "data-integrity": re.compile(r"(?i)(?:^|/)(?:migrations?|backfills?)(?:/|$)|(?:^|/)(?:schema|db)/(?:migrations?|backfills?)(?:/|$)"),
     "compatibility": re.compile(r"(?i)(?:^|/)(?:openapi|swagger)(?:\.|/|$)|\.(?:proto|avsc)$|(?:^|/)(?:public[-_]?)?schemas?(?:/|$)"),
     "rollout": re.compile(r"(?i)(?:^|/)(?:deploy(?:ment)?|helm|terraform|k8s|kubernetes|\.github/workflows)(?:/|$)|(?:^|/)(?:docker-compose|compose)\.ya?ml$|(?:^|/)Dockerfile$"),
+    "ci-workflow": re.compile(r"(?i)(?:^|/)\.github/(?:workflows|actions)/|(?:^|/)\.(?:circleci|buildkite)/|(?:^|/)\.gitlab-ci\.ya?ml$|(?:^|/)azure-pipelines\.ya?ml$|(?:^|/)Jenkinsfile$"),
+    "localization": re.compile(r"(?i)(?:^|/)(?:locales?|i18n|intl|translations?)(?:/|$)|\.(?:po|pot|arb|xliff|xlf)$"),
 }
 
 GATE_SCRIPT_NAMES = {
@@ -315,6 +321,8 @@ def route_candidates(files: list[dict[str, Any]], added: list[tuple[str, int, st
             add("accessibility", path, None, "ui-path", "file-role", "strong", "UI surface changed")
         if "documentation" in roles:
             add("docs-dx", path, None, "documentation-path", "file-role", "weak", "documentation surface changed; semantics require classification")
+        if {"deletion", "rename"} & set(item.get("non_line_changes", ())):
+            add("deprecation", path, None, "replaced-path", "path-structure", "weak", "a path was deleted or renamed; surviving references require classification")
         lowered = path.lower()
         if any(token in lowered for token in ("fixture", "snapshot", "log", "export", "telemetry", "example")):
             add("sensitive-data", path, None, "sensitive-artifact-path", "path-structure", "weak", "sensitive-data-prone artifact changed")

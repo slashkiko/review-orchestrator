@@ -24,11 +24,12 @@ class StructureTest(unittest.TestCase):
 
     def test_reviewer_catalog_is_complete(self) -> None:
         reviewers = {path.stem for path in (SKILL / "references" / "reviewers").glob("*.md")}
-        always = {"semantic-core", "simplify", "test-effectiveness"}
+        always = {"semantic-core", "simplify", "convention", "test-effectiveness", "comment-integrity"}
         conditional = {
             "language-idiom", "security", "reliability", "data-integrity",
             "compatibility", "rollout", "observability", "contract-design",
             "performance", "dependency", "accessibility", "docs-dx", "sensitive-data",
+            "ci-workflow", "deprecation", "localization", "cost",
         }
         self.assertEqual(always | conditional, reviewers)
 

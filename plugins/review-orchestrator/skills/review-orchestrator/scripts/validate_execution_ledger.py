@@ -16,7 +16,7 @@ TIERS = {"fast", "balanced", "deep"}
 TERMINAL_STATUSES = {"completed", "failed", "timed_out", "cancelled", "not_started"}
 SCHEMA_RESULTS = {"passed", "failed", "not_run"}
 ACTUAL_EXPOSURE = {"reported", "not_exposed"}
-CORE_ROLES = {"semantic-core", "simplify", "test-effectiveness"}
+CORE_ROLES = {"semantic-core", "simplify", "convention", "test-effectiveness", "comment-integrity"}
 CONDITIONAL_ROLES = {
     "language-idiom", "security", "reliability", "data-integrity", "compatibility", "rollout",
     "observability", "contract-design", "performance", "dependency", "accessibility", "docs-dx",

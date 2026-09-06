@@ -4,8 +4,8 @@ The shared policy names capability tiers. The host adapter resolves them to mode
 
 | Tier | Baseline roles | Intended capability |
 | --- | --- | --- |
-| `fast` | `language-idiom`, `dependency`, `accessibility`, `docs-dx`, ambiguous route classifier | Narrow, evidence-local classification and review |
-| `balanced` | `semantic-core`, `simplify`, `test-effectiveness`, `reliability`, `compatibility`, `observability`, `contract-design`, `performance`, `sensitive-data`, validator without major conflict | Cross-file causal reasoning |
+| `fast` | `language-idiom`, `dependency`, `accessibility`, `docs-dx`, `deprecation`, `localization`, `cost`, `comment-integrity`, ambiguous route classifier | Narrow, evidence-local classification and review |
+| `balanced` | `semantic-core`, `simplify`, `convention`, `test-effectiveness`, `reliability`, `compatibility`, `observability`, `contract-design`, `performance`, `sensitive-data`, `ci-workflow`, validator without major conflict | Cross-file causal reasoning |
 | `deep` | high-risk `security`, `data-integrity`/migration, `rollout`; rebuttal of a major finding or material conflict | High-stakes, multi-contract reasoning |
 
 Start each role at its baseline. If the host cannot select a requested model or effort, use the smallest available substitute likely to meet the tier and record the substitution; never pretend the requested configuration ran.

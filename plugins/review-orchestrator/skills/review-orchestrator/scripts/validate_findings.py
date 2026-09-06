@@ -15,10 +15,12 @@ from typing import Any, Iterable
 
 
 REVIEWERS = {
-    "semantic-core", "simplify", "test-effectiveness", "language-idiom",
+    "semantic-core", "simplify", "convention", "test-effectiveness", "comment-integrity",
+    "language-idiom",
     "security", "reliability", "data-integrity", "compatibility", "rollout",
     "observability", "contract-design", "performance", "dependency",
-    "accessibility", "docs-dx", "sensitive-data",
+    "accessibility", "docs-dx", "sensitive-data", "ci-workflow", "deprecation",
+    "localization", "cost",
 }
 SEVERITIES = {"critical", "high", "medium", "low"}
 CONFIDENCES = {"high", "medium", "low"}

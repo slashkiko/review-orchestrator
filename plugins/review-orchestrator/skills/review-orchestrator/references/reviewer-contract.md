@@ -67,6 +67,7 @@ The three values must match one snapshot candidate, and the finding location mus
 
 - Report only issues introduced or made materially reachable by the target diff.
 - State preconditions and observable impact. Do not report preferences, speculative future requirements, or mechanically detectable syntax/format/type failures as LLM findings.
+- A cited repository convention is evidence, not a preference: an exact documented rule, or a pattern established by at least two sibling implementations. An uncited style claim remains a preference.
 - Use the narrowest relevant reviewer owner. If the issue crosses domains, identify the primary cause and let aggregation merge corroboration.
 - `confidence: low` may describe an `unverifiable` item but should not be presented as a defect unless evidence still establishes the claim.
 - Sensitive-data findings contain type, location, and redacted fingerprint/candidate ID. Never repeat the detected value.

@@ -63,10 +63,31 @@ All fields are required. A line location uses `side: old|new`, positive line bou
 
 The three values must match one snapshot candidate, and the finding location must be a `side: new` line location covering its exact path and line; a non-line location never satisfies candidate coverage. No free-text field—including summary, coverage, commands, unverifiable entries, evidence, or validation details—may repeat the exact raw candidate value. For credential assignments and Bearer headers, the derived bare secret/token is protected too. Validation resolves these values from the immutable snapshot target and does not reject unrelated public URLs or documented dummy emails merely because they match a general pattern. Invalid output is rejected without echoing the original result.
 
+## Rebuttal verdict
+
+One rebuttal subagent answers one finding with one JSON object and no prose outside it:
+
+```json
+{
+  "rebuttal_of": {"reviewer": "semantic-core", "finding_id": "reviewer-local ID"},
+  "snapshot_hash": "sha256 hex",
+  "verdict": "upheld|weakened|refuted|unverifiable",
+  "rationale": "which question decided it",
+  "narrowed_condition": null,
+  "missing_evidence": null,
+  "counter_evidence": [
+    {"path": "repo/relative", "side": "new", "line": 10, "reason": "fact that defeats or narrows the claim"}
+  ]
+}
+```
+
+All fields are required. `narrowed_condition` is a non-empty string for `weakened` and null otherwise; `missing_evidence` is a non-empty string for `unverifiable` and null otherwise. `counter_evidence` is non-empty for `weakened` and `refuted`, and empty for the other two, so a verdict cannot defeat a finding without a citation. Counter-evidence uses the finding evidence shape and is checked against the immutable target the same way. Two targets may not repeat. `scripts/validate_rebuttals.py` enforces this, and [rebuttal.md](rebuttal.md) defines when each verdict applies.
+
 ## Quality rules
 
 - Report only issues introduced or made materially reachable by the target diff.
 - State preconditions and observable impact. Do not report preferences, speculative future requirements, or mechanically detectable syntax/format/type failures as LLM findings.
+- A cited repository convention is evidence, not a preference: an exact documented rule, or a pattern established by at least two sibling implementations. An uncited style claim remains a preference.
 - Use the narrowest relevant reviewer owner. If the issue crosses domains, identify the primary cause and let aggregation merge corroboration.
 - `confidence: low` may describe an `unverifiable` item but should not be presented as a defect unless evidence still establishes the claim.
 - Sensitive-data findings contain type, location, and redacted fingerprint/candidate ID. Never repeat the detected value.

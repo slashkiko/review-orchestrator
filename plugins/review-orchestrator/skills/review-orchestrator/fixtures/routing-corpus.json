@@ -7,5 +7,9 @@
 {"name":"ui","files":[{"path":"ui/form.tsx","roles":["ui"]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":[],"expected_strong":["accessibility"]},
 {"name":"yaml-weak-classifier-extra","files":[{"path":"notes.yaml","roles":["configuration"]}],"added_lines":[["notes.yaml",1,"auth retry documentation"]],"sensitive_candidates":[],"classifier":["security","reliability","rollout","docs-dx"],"expected_high_risk":["security","reliability","rollout"],"expected_strong":[]},
 {"name":"strong-false-positive","files":[{"path":"auth/fixture.txt","roles":[]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":[],"expected_strong":[]},
-{"name":"classifier-failure","files":[{"path":"readme.md","roles":["documentation"]}],"added_lines":[["readme.md",1,"security rollout"]],"sensitive_candidates":[],"classifier":null,"expected_high_risk":["rollout"],"expected_strong":[]}
+{"name":"classifier-failure","files":[{"path":"readme.md","roles":["documentation"]}],"added_lines":[["readme.md",1,"security rollout"]],"sensitive_candidates":[],"classifier":null,"expected_high_risk":["rollout"],"expected_strong":[]},
+{"name":"ci-workflow-path","files":[{"path":".github/workflows/release.yml","roles":[]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":["rollout"],"expected_strong":["ci-workflow","rollout"]},
+{"name":"deleted-path-weak-deprecation","files":[{"path":"api/old_handler.py","roles":[],"non_line_changes":["deletion"]}],"added_lines":[],"sensitive_candidates":[],"classifier":["deprecation"],"expected_high_risk":[],"expected_strong":[]},
+{"name":"translation-catalog","files":[{"path":"locales/ja.json","roles":[]}],"added_lines":[],"sensitive_candidates":[],"classifier":[],"expected_high_risk":[],"expected_strong":["localization"]},
+{"name":"metered-consumption-keyword","files":[{"path":"worker/model_client.py","roles":[]}],"added_lines":[["worker/model_client.py",1,"max_tokens quota"]],"sensitive_candidates":[],"classifier":["cost"],"expected_high_risk":[],"expected_strong":[]}
 ]}

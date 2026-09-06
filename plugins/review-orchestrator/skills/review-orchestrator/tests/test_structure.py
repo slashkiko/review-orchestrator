@@ -24,11 +24,12 @@ class StructureTest(unittest.TestCase):
 
     def test_reviewer_catalog_is_complete(self) -> None:
         reviewers = {path.stem for path in (SKILL / "references" / "reviewers").glob("*.md")}
-        always = {"semantic-core", "simplify", "test-effectiveness"}
+        always = {"semantic-core", "simplify", "convention", "test-effectiveness", "comment-integrity"}
         conditional = {
             "language-idiom", "security", "reliability", "data-integrity",
             "compatibility", "rollout", "observability", "contract-design",
             "performance", "dependency", "accessibility", "docs-dx", "sensitive-data",
+            "ci-workflow", "deprecation", "localization", "cost",
         }
         self.assertEqual(always | conditional, reviewers)
 
@@ -42,6 +43,7 @@ class StructureTest(unittest.TestCase):
             "review_snapshot.py", "route_selection.py", "validate_findings.py",
             "validate_execution_ledger.py", "run_gates.py", "qualify_scope.py",
             "evaluate_routing_corpus.py", "run_host_smoke.py", "validate_host_e2e.py",
+            "validate_rebuttals.py",
         ):
             mode = (SKILL / "scripts" / name).stat().st_mode
             self.assertTrue(mode & stat.S_IXUSR, name)

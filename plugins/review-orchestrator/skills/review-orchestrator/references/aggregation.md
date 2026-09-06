@@ -4,16 +4,21 @@
 
 Run `scripts/validate_findings.py --snapshot <snapshot> --input <result.json>`. It verifies required fields, enum values, snapshot hash, old/new or non-line locations, evidence paths and line bounds against captured blobs/index/commits, structured unverifiable/coverage/command records, status consistency, sensitive candidate metadata, and exact duplicates. Invalid output is fail-closed: it returns errors without republishing the raw reviewer result. One same-tier retry may repair invalid JSON/schema. A second failure becomes a coverage gap.
 
+## Rebuttal verdicts
+
+Before the validator runs, every mechanically valid finding is challenged by its own rebuttal subagent and the verdicts are checked with `scripts/validate_rebuttals.py --snapshot <snapshot> --input <verdicts.json>`. It verifies the snapshot hash, the target reviewer, the field each verdict requires, and counter-evidence against the captured blobs, and rejects a repeated target. Invalid output is fail-closed exactly as a reviewer result is. The role and its verdicts are defined in [rebuttal.md](rebuttal.md).
+
 ## Validator subagent
 
-After all initial reviewers terminate, give a separate validator subagent the immutable packet and mechanically valid findings. Ask it to:
+After all initial reviewers and their rebuttals terminate, give a separate validator subagent the immutable packet, the mechanically valid findings, and each finding's verdict. Ask it to:
 
 1. verify that the diff introduced or exposed the issue;
 2. trace the claimed condition to observable impact;
 3. reject claims whose evidence only restates the diff, relies on preference, or assumes unavailable facts;
 4. merge findings with the same root cause while preserving corroborating evidence and reviewer provenance;
 5. keep materially conflicting supported conclusions under `unresolved` rather than choosing silently;
-6. request one-tier re-review only under the model-policy escalation conditions.
+6. reconcile each finding with its rebuttal verdict, keeping a supported disagreement under `unresolved` instead of preferring either side;
+7. request one-tier re-review only under the model-policy escalation conditions.
 
 The validator does not decide whether a proposed patch is safe. That requires a separately authorized fix and fix-validation workflow.
 
@@ -21,12 +26,13 @@ The validator does not decide whether a proposed patch is safe. That requires a 
 
 Return:
 
-1. validated findings, highest severity first;
-2. unresolved conflicts;
-3. unverifiable items that name obtainable missing evidence;
-4. coverage.
+1. validated findings, highest severity first, each carrying its rebuttal verdict;
+2. refuted and weakened findings with the counter-evidence that defeated or narrowed them;
+3. unresolved conflicts;
+4. unverifiable items that name obtainable missing evidence;
+5. coverage.
 
-Coverage must list target and final snapshot hash; reviewed and skipped perspectives with reasons; task failures/timeouts; requested and actual model/effort; escalation reasons and before/after IDs; examined and excluded paths; unavailable evidence; commands with scope/outcome/attribution/reason; dynamic checks not run; and stale status.
+Coverage must list target and final snapshot hash; reviewed and skipped perspectives with reasons; findings left `not_rebutted` and why; task failures/timeouts; requested and actual model/effort; escalation reasons and before/after IDs; examined and excluded paths; unavailable evidence; commands with scope/outcome/attribution/reason; dynamic checks not run; and stale status.
 
 Never collapse these states:
 

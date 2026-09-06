@@ -21,7 +21,7 @@ class ExecutionLedgerTest(unittest.TestCase):
         return {
             "schema_version": 1,
             "snapshot_hash": "a" * 64,
-            "selected_roles": ["semantic-core", "simplify", "test-effectiveness", "security"],
+            "selected_roles": ["semantic-core", "simplify", "convention", "test-effectiveness", "comment-integrity", "security", "rebuttal:semantic-core.F-1"],
             "entries": [
                 {
                     "role": "semantic-core",
@@ -45,10 +45,31 @@ class ExecutionLedgerTest(unittest.TestCase):
                     "terminal_status": "completed", "timeout_seconds": 900, "schema_validation": "passed",
                 },
                 {
+                    "role": "convention",
+                    "requested": {"tier": "balanced", "model": "model", "effort": "medium"},
+                    "actual": {"exposure": "reported", "model": "model", "effort": "medium"},
+                    "host_task_id": "task-4", "attempt": 1, "retry_or_escalation_reason": None,
+                    "terminal_status": "completed", "timeout_seconds": 900, "schema_validation": "passed",
+                },
+                {
+                    "role": "comment-integrity",
+                    "requested": {"tier": "fast", "model": "model", "effort": None},
+                    "actual": {"exposure": "reported", "model": "model", "effort": None},
+                    "host_task_id": "task-5", "attempt": 1, "retry_or_escalation_reason": None,
+                    "terminal_status": "completed", "timeout_seconds": 900, "schema_validation": "passed",
+                },
+                {
+                    "role": "rebuttal:semantic-core.F-1",
+                    "requested": {"tier": "balanced", "model": "model", "effort": "medium"},
+                    "actual": {"exposure": "reported", "model": "model", "effort": "medium"},
+                    "host_task_id": "task-6", "attempt": 1, "retry_or_escalation_reason": None,
+                    "terminal_status": "completed", "timeout_seconds": 900, "schema_validation": "passed",
+                },
+                {
                     "role": "security",
                     "requested": {"tier": "deep", "model": None, "effort": "high"},
                     "actual": {"exposure": "not_exposed", "model": None, "effort": None},
-                    "host_task_id": "task-4", "attempt": 1, "retry_or_escalation_reason": None,
+                    "host_task_id": "task-7", "attempt": 1, "retry_or_escalation_reason": None,
                     "terminal_status": "timed_out", "timeout_seconds": 900, "schema_validation": "not_run",
                 },
             ],
@@ -67,6 +88,14 @@ class ExecutionLedgerTest(unittest.TestCase):
         output = json.loads(completed.stdout)
         self.assertEqual("incomplete", output["coverage"])
         self.assertEqual(["security"], output["missing_roles"])
+
+    def test_rejects_a_malformed_rebuttal_role_key(self) -> None:
+        ledger = self.ledger()
+        ledger["selected_roles"][-1] = "rebuttal:"
+        ledger["entries"][5]["role"] = "rebuttal:"
+        completed = self.invoke(ledger)
+        self.assertEqual(1, completed.returncode)
+        self.assertTrue(any("role is unknown" in error for error in json.loads(completed.stdout)["errors"]))
 
     def test_rejects_invalid_required_enum(self) -> None:
         ledger = self.ledger()
@@ -90,7 +119,7 @@ class ExecutionLedgerTest(unittest.TestCase):
         ledger = self.ledger()
         ledger["selected_roles"] = []
         ledger["snapshot_hash"] = "not-a-hash"
-        ledger["entries"][3]["schema_validation"] = "passed"
+        ledger["entries"][6]["schema_validation"] = "passed"
         completed = self.invoke(ledger)
         self.assertEqual(1, completed.returncode)
         errors = json.loads(completed.stdout)["errors"]

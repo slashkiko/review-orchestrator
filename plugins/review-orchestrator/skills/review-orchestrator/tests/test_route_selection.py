@@ -22,7 +22,7 @@ class RouteSelectionTest(unittest.TestCase):
             "rollout": [{"strength": "strong"}], "dependency": [{"strength": "strong"}],
         }
         selection = MODULE.select_routes(candidates, None)
-        self.assertTrue({"semantic-core", "simplify", "test-effectiveness", "security", "rollout", "dependency"}.issubset(selection["selected"]))
+        self.assertTrue({"semantic-core", "simplify", "convention", "test-effectiveness", "security", "rollout", "dependency"}.issubset(selection["selected"]))
         self.assertEqual({"docs-dx": "routing_classifier_failed"}, selection["not_evaluated"])
         self.assertGreater(len(selection["selected"]), 5)  # Strong routes do not consume a global cap.
 

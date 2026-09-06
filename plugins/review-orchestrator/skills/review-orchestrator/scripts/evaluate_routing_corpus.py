@@ -17,6 +17,7 @@ HIGH_RISK = {"security", "data-integrity", "reliability", "rollout"}
 CONDITIONAL = route_selection.HIGH_IMPACT_WEAK | {
     "language-idiom", "compatibility", "observability", "contract-design", "performance",
     "dependency", "accessibility", "docs-dx", "sensitive-data",
+    "ci-workflow", "deprecation", "localization", "cost",
 }
 
 

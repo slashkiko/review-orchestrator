@@ -12,7 +12,8 @@ Do not ask a model to rediscover a fact in the deterministic column. Do not pres
 | Hybrid | change map | mechanical symbol/path candidates first; LLM expands implicit contracts, paired operations, and downstream meaning |
 | Hybrid | reviewer routing | path/file/keyword candidates first; a fast classifier decides only genuinely ambiguous relevance |
 | LLM | semantic, simplification, convention, comment-integrity, test-effectiveness, and specialist reviews | causal and contextual claims under one reviewer contract |
-| Hybrid | aggregation | mechanical validity first; validator subagent decides shared cause, reachability, impact, confidence, and material conflict |
+| LLM | rebuttal of one finding | whether the cited evidence establishes that claim; counter-evidence under the same evidence contract |
+| Hybrid | aggregation | mechanical validity first; validator subagent decides shared cause, reachability, impact, confidence, and material conflict, and reconciles each finding with its rebuttal verdict |
 | Hybrid | coverage | execution facts are mechanical; LLM may summarize residual risk without changing those facts |
 
 `validate_findings.py` resolves each candidate's exact raw match from the immutable target and rejects only that value (plus a credential assignment's or Bearer header's derived bare token) when it is copied into reviewer output. It does not apply broad secret/PII patterns to unrelated output text. `review_snapshot.py` does not select reviewers or claim impact. `validate_findings.py` does not determine whether a claim is true or whether a fix is safe. Those limits are part of their contract, not implementation gaps. Any scope gap prevents clean/full-coverage wording unless it is explicitly approved and qualified.

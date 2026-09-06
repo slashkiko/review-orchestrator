@@ -24,12 +24,19 @@ CONDITIONAL_ROLES = {
 }
 AUXILIARY_ROLES = {"validator", "routing-classifier"}
 KNOWN_ROLES = CORE_ROLES | CONDITIONAL_ROLES | AUXILIARY_ROLES
+# Each rebuttal answers one finding, so it carries its own role key. Sharing one
+# `rebuttal` key would make the per-role attempt sequence below unreadable.
+REBUTTAL_ROLE = re.compile(r"rebuttal:[A-Za-z0-9._-]{1,64}")
 TOP_LEVEL_FIELDS = {"schema_version", "snapshot_hash", "selected_roles", "entries"}
 ENTRY_FIELDS = {
     "role", "requested", "actual", "host_task_id", "attempt",
     "retry_or_escalation_reason", "terminal_status", "timeout_seconds",
     "schema_validation",
 }
+
+
+def known_role(role: Any) -> bool:
+    return role in KNOWN_ROLES or (isinstance(role, str) and REBUTTAL_ROLE.fullmatch(role) is not None)
 
 
 def error_if(condition: bool, message: str, errors: list[str]) -> None:
@@ -59,7 +66,7 @@ def validate_entry(entry: Any, index: int, errors: list[str]) -> None:
     if not isinstance(entry, dict):
         return
     error_if(not nonempty_string(entry.get("role")), f"{where}.role must be a non-empty string", errors)
-    error_if(entry.get("role") not in KNOWN_ROLES, f"{where}.role is unknown", errors)
+    error_if(not known_role(entry.get("role")), f"{where}.role is unknown", errors)
     requested = entry.get("requested")
     exact_fields(requested, {"tier", "model", "effort"}, f"{where}.requested", errors)
     if isinstance(requested, dict):
@@ -107,7 +114,7 @@ def validate(ledger: Any) -> tuple[dict[str, Any], list[str]]:
     elif len(set(selected)) != len(selected):
         errors.append("ledger.selected_roles must not contain duplicates")
     else:
-        unknown = sorted(set(selected) - KNOWN_ROLES)
+        unknown = sorted(role for role in set(selected) if not known_role(role))
         if unknown:
             errors.append("ledger.selected_roles has unknown role(s): " + ", ".join(unknown))
         missing_core = sorted(CORE_ROLES - set(selected))

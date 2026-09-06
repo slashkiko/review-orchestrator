@@ -43,6 +43,7 @@ class StructureTest(unittest.TestCase):
             "review_snapshot.py", "route_selection.py", "validate_findings.py",
             "validate_execution_ledger.py", "run_gates.py", "qualify_scope.py",
             "evaluate_routing_corpus.py", "run_host_smoke.py", "validate_host_e2e.py",
+            "validate_rebuttals.py",
         ):
             mode = (SKILL / "scripts" / name).stat().st_mode
             self.assertTrue(mode & stat.S_IXUSR, name)

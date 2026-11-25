@@ -14,9 +14,10 @@ import validate_findings
 
 VERDICTS = {"upheld", "weakened", "refuted", "unverifiable"}
 COUNTER_EVIDENCE_VERDICTS = {"weakened", "refuted"}
+SUPPORTING_EVIDENCE_VERDICTS = {"upheld", "weakened"}
 REBUTTAL_FIELDS = {
     "rebuttal_of", "snapshot_hash", "verdict", "rationale",
-    "narrowed_condition", "missing_evidence", "counter_evidence",
+    "narrowed_condition", "missing_evidence", "supporting_evidence", "counter_evidence",
 }
 TARGET_FIELDS = {"reviewer", "finding_id"}
 
@@ -59,6 +60,12 @@ def validate_rebuttal(
         validate_findings.require_string(value, "missing_evidence", where, errors)
     elif value.get("missing_evidence") is not None:
         errors.append(f"{where}.missing_evidence is only valid for an unverifiable verdict")
+
+    supporting = value.get("supporting_evidence")
+    if verdict in SUPPORTING_EVIDENCE_VERDICTS:
+        validate_findings.validate_evidence(supporting, snapshot, f"{where}.supporting_evidence", errors)
+    elif supporting != []:
+        errors.append(f"{where}.supporting_evidence must be empty unless the finding is upheld or weakened")
 
     counter = value.get("counter_evidence")
     if verdict in COUNTER_EVIDENCE_VERDICTS:

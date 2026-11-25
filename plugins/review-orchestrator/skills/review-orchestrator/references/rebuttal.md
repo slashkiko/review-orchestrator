@@ -6,7 +6,7 @@ One rebuttal subagent receives one mechanically valid finding and tries to break
 
 ## Independence
 
-The main session dispatches one rebuttal per mechanically valid finding after `scripts/validate_findings.py` accepts the reviewer result and before the validator subagent runs. Each rebuttal receives the same immutable evidence packet, exactly one finding, and this definition.
+The review-run owner dispatches one rebuttal per mechanically valid finding after `scripts/validate_findings.py` accepts the reviewer result and before the validator subagent runs. Each rebuttal receives the same immutable evidence packet, exactly one finding, and this definition.
 
 A rebuttal never receives another finding, another rebuttal's verdict, the rest of its reviewer's output, or the validator's conclusion. A reviewer never rebuts a finding, its own or anyone's. A rebuttal never spawns a subagent and never edits code.
 
@@ -25,18 +25,18 @@ Return exactly one:
 
 | Verdict | When | Required |
 | --- | --- | --- |
-| `upheld` | the cited evidence establishes the claim | nothing beyond the rationale |
-| `weakened` | the claim holds only under a narrower precondition or a lower severity than stated | `narrowed_condition` and counter-evidence |
+| `upheld` | the cited evidence establishes the claim | supporting evidence and a causal rationale |
+| `weakened` | the claim holds only under a narrower precondition or a lower severity than stated | supporting evidence, `narrowed_condition`, and counter-evidence |
 | `refuted` | a cited counter-fact defeats the claim | counter-evidence, and the Ask question that failed |
 | `unverifiable` | deciding needs evidence the packet does not carry and this role may not obtain | `missing_evidence` |
 
-Two rules keep the verdict honest. **Absence of counter-evidence is `upheld`, never `refuted`**: a rebuttal that searched and found nothing has confirmed the finding, and says so. **A suspicion is `unverifiable`, never `refuted`**: "this seems unlikely" without a cited artifact names missing evidence instead.
+Two rules keep the verdict honest. **Absence of counter-evidence proves neither `upheld` nor `refuted`**: uphold only when cited evidence establishes the reachable precondition, causality, and impact; otherwise name the missing evidence as `unverifiable`. **A suspicion is `unverifiable`, never `refuted`**: "this seems unlikely" without a cited artifact names missing evidence instead.
 
-Counter-evidence uses the shared evidence shape and is checked against the immutable target by `scripts/validate_rebuttals.py`, exactly as a finding's evidence is. Record the search terms and scope behind a claim that a precondition is unreachable.
+Supporting evidence and counter-evidence use the shared evidence shape and are checked against the immutable target by `scripts/validate_rebuttals.py`, exactly as a finding's evidence is. Supporting evidence may reuse the finding's citations; explain the causal support rather than copying the claim. Mechanical validity does not establish semantic truth; the separate validator must assess it. Record the search terms and scope behind a claim that a precondition is unreachable.
 
 ## What happens to the verdict
 
-The validator receives every finding together with its verdict and reconciles them; see [aggregation.md](aggregation.md). A refuted finding is reported as refuted with its counter-evidence and is never dropped silently. Where the validator and the rebuttal reach supported but conflicting conclusions, the conflict goes to `unresolved` rather than being settled by the main session.
+The validator receives every finding together with its verdict and reconciles them; see [aggregation.md](aggregation.md). A refuted finding is reported as refuted with its counter-evidence and is never dropped silently. Where the validator and the rebuttal reach supported but conflicting conclusions, the conflict goes to `unresolved` rather than being settled by the review-run owner.
 
 ## Exclude
 

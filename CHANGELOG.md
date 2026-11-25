@@ -1,6 +1,35 @@
 # Changelog
 
-## Unreleased
+## Unreleased (2.0.0)
+
+### Breaking changes
+
+- Rebuttal output must include `supporting_evidence`. `upheld` and `weakened`
+  require citations establishing the claim; absence of counter-evidence is not
+  support. Regenerate older rebuttal output instead of filling this field
+  without reassessing the claim.
+- A delegation-capable nested lead can own a review run. The context that starts
+  it owns snapshotting, workers, the execution ledger, and aggregation through
+  completion. It must not transfer a live run to the parent context.
+- Host smoke fixtures use schema v3 and host artifacts use schema v5, including
+  nested-owner evidence and verified delegation traces. Regenerate older smoke
+  artifacts; they cannot prove the new topology. Smoke adapters inherit the
+  host's model and effort defaults and record that requested policy.
+
+### Review behavior
+
+- Give prior finding decisions only to the final validator, after independent
+  discovery and rebuttal. Reopen a rejected claim only when new evidence or a
+  changed precondition defeats the earlier rationale.
+- Require complete coverage and no unresolved or unverifiable items for a clean
+  conclusion. `open_questions` remains non-clean, including when there are no
+  supported findings. Do not repeat an unchanged snapshot solely to obtain
+  consecutive clean results.
+- Add a non-delegating Claude review worker and a cross-host nested-owner smoke.
+  Timeout terminates the CLI process group so worker processes cannot outlive
+  the smoke deadline within that group.
+
+### Fixes
 
 - Fixed snapshot line ranges after a removed line that starts with `-- ` or an
   added line that starts with `++ `, which the diff shows like a file header.

@@ -2,13 +2,14 @@
 
 ## Invariants
 
-- The main session owns target resolution, snapshot creation, routing, wave scheduling, validation, and final aggregation.
+- One review-run owner, defined in [ownership.md](ownership.md), exclusively owns target resolution, snapshot creation, routing, wave scheduling, validation, stale verification, and final aggregation. Root/main status is not required; delegation capability is.
 - Every selected reviewer is one independent subagent. Never combine two perspectives into one task to save a slot.
+- The owner dispatches every reviewer, rebuttal, routing classifier, and validator directly. None of those workers may spawn another worker or invoke this skill as an orchestrator.
 - Logically dispatch all reviewers from one selection decision. Physical waves are allowed only because the host lacks free concurrent slots.
 - Give every reviewer the same snapshot ID and change map, then add only its reviewer definition. Do not pass findings between initial reviewers or from one wave to the next.
 - Dispatch one rebuttal subagent per mechanically valid finding once its reviewer result is accepted. Each receives exactly one finding and never another rebuttal's verdict; see [rebuttal.md](rebuttal.md).
 - Run the finding validator only after all reviewer and rebuttal tasks are terminal (`completed`, `failed`, or `timed out`). The validator is another independent subagent.
-- The main session writes and validates the shared [execution ledger](execution-ledger.md); reviewers never self-report host configuration or execution facts. Missing selected-role entries make coverage incomplete.
+- The review-run owner writes and validates the shared [execution ledger](execution-ledger.md); reviewers never self-report host configuration or execution facts. Missing selected-role entries make coverage incomplete.
 
 ## Reviewer task envelope
 
@@ -27,6 +28,8 @@ Ask the reviewer to investigate repository context itself when the packet names 
 ## Scheduling and failure
 
 Determine available host slots at runtime. Fill all available slots, wait for terminal results, then dispatch the next wave. Preserve the original task envelope across waves. Do not serialize merely to observe progress.
+
+The owner checks the host adapter's concrete delegation-capability signal before target resolution. For Claude Code this is `Agent` tool exposure, not an inferred numeric depth. If it cannot dispatch all required worker kinds, do not start the run. If capability is lost after start, keep ownership, record affected roles as `not_evaluated`, and report incomplete coverage; never transfer the live run or merge another context's ledger.
 
 - A malformed result gets one schema-focused retry at the same tier.
 - A timeout is recorded as `not_evaluated`; it is not a reason to select a stronger model.

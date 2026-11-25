@@ -57,6 +57,8 @@ plugins/
   review-orchestrator/
     .codex-plugin/plugin.json
     .claude-plugin/plugin.json
+    agents/
+      review-worker.md
     skills/
       review-orchestrator/
         SKILL.md
@@ -82,3 +84,20 @@ vulnerability reporting.
 ## License
 
 Apache License 2.0. See `LICENSE`.
+
+## Upgrade to 2.0
+
+Use the same release on Codex and Claude Code. Keep the previous plugin source
+and host settings until the new version has passed discovery and smoke checks.
+Do not replace a marketplace checkout that still owns a worktree with local
+changes.
+
+Existing review findings retain their schema. Rebuttal JSON from 1.x must be
+regenerated with `supporting_evidence`; an old `upheld` label is not evidence.
+Regenerate host smoke fixtures and artifacts for the nested-owner contract in
+[the cross-host E2E reference](plugins/review-orchestrator/skills/review-orchestrator/references/host-e2e.md).
+
+Callers may start a review from a nested lead when delegation is available. The
+same lead must own the whole run; callers must not transfer a partial snapshot
+or execution ledger to the main context. If delegation is unavailable, report
+`not_evaluated` rather than running the perspectives sequentially.

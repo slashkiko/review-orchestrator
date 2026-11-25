@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a host-neutral, main-owned reviewer execution ledger."""
+"""Validate a host-neutral, review-run-owner-managed execution ledger."""
 
 from __future__ import annotations
 

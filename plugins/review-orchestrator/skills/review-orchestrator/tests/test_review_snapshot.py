@@ -71,6 +71,19 @@ class ReviewSnapshotTest(unittest.TestCase):
         self.assertNotIn(raw_email, encoded_candidates)
         self.assertNotIn(raw_path, encoded_candidates)
 
+    def test_changed_lines_that_look_like_file_headers_stay_in_their_hunk(self) -> None:
+        (self.repo / "q.sql").write_text("-- note\na\nb\nc\nd\n", encoding="utf-8")
+        run("git", "add", "q.sql", cwd=self.repo)
+        self.commit("add query")
+        (self.repo / "q.sql").write_text("a\nb\nC\nd\n++ added\n", encoding="utf-8")
+        (self.repo / "app.py").write_text("def answer():\n    return 2\n", encoding="utf-8")
+
+        snapshot = self.working_snapshot()
+
+        files = {item["path"]: item["changed_ranges"] for item in snapshot["files"]}
+        self.assertEqual({"old": [[1, 1], [4, 4]], "new": [[3, 3], [5, 5]]}, files["q.sql"])
+        self.assertEqual({"old": [[2, 2]], "new": [[2, 2]]}, files["app.py"])
+
     def test_working_scope_gaps_cover_untracked_boundaries_without_leaking_targets(self) -> None:
         ordinary = self.repo / "scratch"
         ordinary.mkdir()

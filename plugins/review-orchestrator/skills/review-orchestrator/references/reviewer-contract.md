@@ -71,17 +71,20 @@ One rebuttal subagent answers one finding with one JSON object and no prose outs
 {
   "rebuttal_of": {"reviewer": "semantic-core", "finding_id": "reviewer-local ID"},
   "snapshot_hash": "sha256 hex",
-  "verdict": "upheld|weakened|refuted|unverifiable",
+  "verdict": "upheld",
   "rationale": "which question decided it",
   "narrowed_condition": null,
   "missing_evidence": null,
-  "counter_evidence": [
-    {"path": "repo/relative", "side": "new", "line": 10, "reason": "fact that defeats or narrows the claim"}
-  ]
+  "supporting_evidence": [
+    {"path": "repo/relative", "side": "new", "line": 10, "reason": "fact establishing the claim and its precondition"}
+  ],
+  "counter_evidence": []
 }
 ```
 
-All fields are required. `narrowed_condition` is a non-empty string for `weakened` and null otherwise; `missing_evidence` is a non-empty string for `unverifiable` and null otherwise. `counter_evidence` is non-empty for `weakened` and `refuted`, and empty for the other two, so a verdict cannot defeat a finding without a citation. Counter-evidence uses the finding evidence shape and is checked against the immutable target the same way. Two targets may not repeat. `scripts/validate_rebuttals.py` enforces this, and [rebuttal.md](rebuttal.md) defines when each verdict applies.
+All fields are required. `narrowed_condition` is a non-empty string for `weakened` and null otherwise; `missing_evidence` is a non-empty string for `unverifiable` and null otherwise. `supporting_evidence` is non-empty for `upheld` and `weakened`, and empty for the other two. `counter_evidence` is non-empty for `weakened` and `refuted`, and empty for the other two. Both arrays use the finding evidence shape and are checked against the immutable target the same way. Supporting citations may reuse the finding's evidence, but the rationale must explain how it supports the claim. Two targets may not repeat. `scripts/validate_rebuttals.py` enforces this, and [rebuttal.md](rebuttal.md) defines when each verdict applies.
+
+Older rebuttal output without `supporting_evidence` is invalid under this contract. Regenerate it; do not infer support from an old `upheld` label or insert citations without reassessing the claim.
 
 ## Quality rules
 

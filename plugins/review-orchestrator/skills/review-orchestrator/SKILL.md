@@ -7,6 +7,8 @@ description: "Use only for explicitly requested multi-perspective code review: m
 
 Review one immutable change snapshot through independent perspectives and return validated findings plus explicit coverage. Do not modify code, install tools, post comments, or write to external services. A request to review does not authorize any of those actions.
 
+One run completes the selected perspective set on one snapshot. Do not repeat the whole set on an unchanged snapshot merely to obtain consecutive clean results or because the first run found nothing. Repair missing coverage under the execution policy and investigate an identified evidence gap under the model policy; record the reason and scope of any additional review. A calling implementation workflow owns fixes, final-snapshot verification, prior finding decisions, and its cumulative work budget; this skill does not loop until approval.
+
 ## Run the review
 
 1. Resolve exactly one target: PR, commit range, index (`staged`), or working tree including untracked files. State the resolved target, base/head (or working/staged), included untracked files, scope gaps, and that a diff review is not a full-repository audit. Hand off a full-repository request rather than silently reading it as a working-tree review. For a PR, obtain its base/head commits and declared intent using available read-only tools, then snapshot with `--merge-base` (or pass the already-resolved merge-base SHA as `--base`).

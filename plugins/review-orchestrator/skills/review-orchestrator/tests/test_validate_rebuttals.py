@@ -48,6 +48,9 @@ class ValidateRebuttalsTest(unittest.TestCase):
             "rationale": "The cited line carries the changed return the claim depends on.",
             "narrowed_condition": None,
             "missing_evidence": None,
+            "supporting_evidence": [
+                {"path": "app.py", "side": "new", "line": 2, "reason": "The changed return supports the claim."},
+            ],
             "counter_evidence": [],
         }
 
@@ -55,6 +58,7 @@ class ValidateRebuttalsTest(unittest.TestCase):
         rebuttal = self.upheld()
         rebuttal["verdict"] = "refuted"
         rebuttal["rationale"] = "The precondition is unreachable; no caller observes the value."
+        rebuttal["supporting_evidence"] = []
         rebuttal["counter_evidence"] = [
             {"path": "app.py", "side": "new", "line": 1, "reason": "The function has no caller in the target."},
         ]
@@ -84,6 +88,46 @@ class ValidateRebuttalsTest(unittest.TestCase):
         self.assertEqual(1, completed.returncode)
         self.assertTrue(any("counter_evidence" in error for error in json.loads(completed.stdout)["errors"]))
 
+    def test_rejects_upheld_without_supporting_evidence(self) -> None:
+        rebuttal = self.upheld()
+        rebuttal.pop("supporting_evidence", None)
+        completed = self.invoke([rebuttal])
+        self.assertEqual(1, completed.returncode)
+        self.assertTrue(any("supporting_evidence" in error for error in json.loads(completed.stdout)["errors"]))
+
+    def test_rejects_empty_or_out_of_bounds_supporting_evidence(self) -> None:
+        for evidence in ([], [{"path": "app.py", "side": "new", "line": 99, "reason": "Outside target."}]):
+            with self.subTest(evidence=evidence):
+                completed = self.invoke([self.upheld() | {"supporting_evidence": evidence}])
+                self.assertEqual(1, completed.returncode)
+                self.assertTrue(any("supporting_evidence" in error for error in json.loads(completed.stdout)["errors"]))
+
+    def test_accepts_weakened_with_supporting_and_counter_evidence(self) -> None:
+        rebuttal = self.upheld()
+        rebuttal["verdict"] = "weakened"
+        rebuttal["narrowed_condition"] = "Only callers that use the return value are affected."
+        rebuttal["counter_evidence"] = self.refuted()["counter_evidence"]
+        completed = self.invoke([rebuttal])
+        self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
+        rebuttal["supporting_evidence"] = []
+        completed = self.invoke([rebuttal])
+        self.assertEqual(1, completed.returncode)
+        self.assertTrue(any("supporting_evidence" in error for error in json.loads(completed.stdout)["errors"]))
+
+    def test_unverifiable_requires_missing_evidence_without_claim_support(self) -> None:
+        rebuttal = self.upheld()
+        rebuttal["verdict"] = "unverifiable"
+        rebuttal["missing_evidence"] = "The caller and its inputs are not in the packet."
+        rebuttal["supporting_evidence"] = []
+        completed = self.invoke([rebuttal])
+        self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
+        rebuttal["supporting_evidence"] = self.upheld()["supporting_evidence"]
+        completed = self.invoke([rebuttal])
+        self.assertEqual(1, completed.returncode)
+        self.assertTrue(any("supporting_evidence must be empty" in error for error in json.loads(completed.stdout)["errors"]))
+
     def test_rejects_counter_evidence_outside_the_immutable_target(self) -> None:
         rebuttal = self.refuted()
         rebuttal["counter_evidence"][0]["path"] = "absent.py"
@@ -109,6 +153,7 @@ class ValidateRebuttalsTest(unittest.TestCase):
 
         unverifiable = self.upheld()
         unverifiable["verdict"] = "unverifiable"
+        unverifiable["supporting_evidence"] = []
         completed = self.invoke([unverifiable])
         self.assertEqual(1, completed.returncode)
         self.assertTrue(any("missing_evidence" in error for error in json.loads(completed.stdout)["errors"]))

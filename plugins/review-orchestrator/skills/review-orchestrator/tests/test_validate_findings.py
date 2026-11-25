@@ -280,6 +280,22 @@ class ValidateFindingsTest(unittest.TestCase):
         output = self.assert_invalid(self.base_result(), tampered)
         self.assertTrue(any("snapshot canonical identity" in error for error in output["errors"]))
 
+    def test_completed_may_carry_unverifiable_but_not_unexamined_areas(self) -> None:
+        completed = self.base_result()
+        completed["unverifiable"] = [{
+            "id": "U-1", "claim": "Whether callers rely on the old error type is unknown.",
+            "missing_evidence": "No caller of the changed function exists in the repository.",
+            "why_it_matters": "An external caller could break on the new return value.",
+            "retrieval": "Search dependent repositories with existing read-only access.",
+        }]
+        self.assertEqual("open_questions", self.assert_valid(completed)["state"])
+        self.assertEqual("findings", self.assert_valid(self.base_result())["state"])
+        self.assertEqual("no_finding", self.assert_valid({**self.base_result(), "findings": []})["state"])
+        unexamined = copy.deepcopy(completed)
+        unexamined["coverage"]["not_examined"] = [{"area": "callers", "reason": "Search was not run."}]
+        output = self.assert_invalid(unexamined)
+        self.assertTrue(any("not_examined" in error for error in output["errors"]))
+
     def test_partial_and_failed_status_consistency(self) -> None:
         partial = self.base_result()
         partial.update({

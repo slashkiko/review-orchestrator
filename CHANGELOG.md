@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Fixed snapshot line ranges after a removed line that starts with `-- ` or an
+  added line that starts with `++ `, which the diff shows like a file header.
+  Later hunks on that side were recorded under a path taken from that line.
+- Let `completed` reviewer results carry `unverifiable` questions that were
+  examined but not settled, and added an `open_questions` state so such a
+  review is never reported as clean.
+
 ## v1.4.0 - 2026-09-07
 
 - Added the always-on `convention` reviewer, which owns departures from documented

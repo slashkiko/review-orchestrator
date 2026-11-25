@@ -195,44 +195,55 @@ def parse_line_changes(patch: bytes) -> tuple[dict[str, dict[str, list[int]]], l
     new_path: str | None = None
     old_line = 0
     new_line = 0
-    in_hunk = False
+    # Lines left in the current hunk per side, from its header. A removed
+    # line whose text starts with "-- " reads as "--- ..." and an added
+    # "++ " line as "+++ ...", so file headers are recognized only once the
+    # hunk's counts are spent.
+    old_left = 0
+    new_left = 0
 
     def record(path: str, side: str, line: int) -> None:
         changes.setdefault(path, {"old": [], "new": []})[side].append(line)
 
     for line in patch.decode("utf-8", "replace").splitlines():
+        if old_left or new_left:
+            if line.startswith("\\"):
+                continue
+            if line.startswith("-") and old_left:
+                if old_path is not None:
+                    record(old_path, "old", old_line)
+                old_line += 1
+                old_left -= 1
+                continue
+            if line.startswith("+") and new_left:
+                if new_path is not None:
+                    record(new_path, "new", new_line)
+                    added.append((new_path, new_line, line[1:]))
+                new_line += 1
+                new_left -= 1
+                continue
+            if line.startswith(" ") and old_left and new_left:
+                old_line += 1
+                new_line += 1
+                old_left -= 1
+                new_left -= 1
+                continue
+            # A line that does not fit the counts ends the hunk.
+            old_left = new_left = 0
         if line.startswith("diff --git "):
             old_path = None
             new_path = None
-            in_hunk = False
         elif line.startswith("--- "):
             old_path = patch_path(line[4:])
-            in_hunk = False
         elif line.startswith("+++ "):
             new_path = patch_path(line[4:])
-            in_hunk = False
         elif line.startswith("@@ "):
             match = re.search(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
             if match:
                 old_line = int(match.group(1))
                 new_line = int(match.group(3))
-                in_hunk = True
-        elif in_hunk and line.startswith("-") and not line.startswith("---"):
-            if old_path is not None:
-                record(old_path, "old", old_line)
-            old_line += 1
-        elif in_hunk and line.startswith("+") and not line.startswith("+++"):
-            if new_path is not None:
-                record(new_path, "new", new_line)
-                added.append((new_path, new_line, line[1:]))
-            new_line += 1
-        elif in_hunk and line.startswith(" "):
-            old_line += 1
-            new_line += 1
-        elif in_hunk and line.startswith("\\"):
-            continue
-        elif in_hunk:
-            in_hunk = False
+                old_left = int(match.group(2) if match.group(2) is not None else 1)
+                new_left = int(match.group(4) if match.group(4) is not None else 1)
     return changes, added
 
 

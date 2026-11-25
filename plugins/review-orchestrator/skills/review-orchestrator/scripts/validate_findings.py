@@ -485,8 +485,10 @@ def validate_status_consistency(
     if status == "completed":
         if not examined:
             errors.append("completed status requires non-empty coverage.examined")
-        if not_examined or unverifiable:
-            errors.append("completed status cannot contain unevaluated coverage")
+        # `unverifiable` records a question that was examined but left open, so
+        # it does not contradict a completed scope; only unexamined areas do.
+        if not_examined:
+            errors.append("completed status cannot contain not_examined coverage")
     elif status == "partial":
         if not examined or not not_examined:
             errors.append("partial status requires both examined and not_examined coverage")
@@ -552,9 +554,18 @@ def validate(snapshot: dict[str, Any], result: Any) -> tuple[dict[str, Any], lis
 
     if errors:
         return {"valid": False, "errors": errors, "duplicate_count": len(duplicate_ids)}, errors
+    # The aggregation state, so a completed result that left questions open is
+    # never read as a clean one.
+    if status != "completed":
+        state = status
+    elif unverifiable:
+        state = "open_questions"
+    else:
+        state = "findings" if unique else "no_finding"
     output = {
         "valid": True,
         "errors": [],
+        "state": state,
         "duplicate_count": len(duplicate_ids),
         "duplicate_ids": duplicate_ids,
         "result": {**result, "findings": unique},

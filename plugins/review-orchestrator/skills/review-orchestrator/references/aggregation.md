@@ -37,7 +37,10 @@ Coverage must list target and final snapshot hash; reviewed and skipped perspect
 Never collapse these states:
 
 - `passed`: a named command actually succeeded;
-- `no_finding`: a reviewer completed its stated scope without a supported issue;
+- `no_finding`: a reviewer completed its stated scope without a supported issue or an `unverifiable` item;
+- `open_questions`: a reviewer completed its stated scope but left `unverifiable` items, with or without findings;
 - `not_evaluated`: skipped, failed, timed out, lacked evidence, or was outside available authority.
 
-If the snapshot is stale, do not issue a clean verdict. If any selected reviewer is `not_evaluated`, qualify the conclusion to its actual coverage.
+`validate_findings.py` reports a valid result's `state` as `no_finding`, `open_questions`, `findings`, `partial`, or `failed`; use it rather than re-deriving the state from the result.
+
+If the snapshot is stale, do not issue a clean verdict. If any reviewer is `open_questions`, list its unverifiable items with the conclusion and do not state the review as clean. If any selected reviewer is `not_evaluated`, qualify the conclusion to its actual coverage.

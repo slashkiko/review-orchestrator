@@ -2,7 +2,7 @@
 
 ## Mechanical validation
 
-Run `scripts/validate_findings.py --snapshot <snapshot> --input <result.json>`. It verifies required fields, enum values, snapshot hash, old/new or non-line locations, evidence paths and line bounds against captured blobs/index/commits, structured unverifiable/coverage/command records, status consistency, sensitive candidate metadata, and exact duplicates. Invalid output is fail-closed: it returns errors without republishing the raw reviewer result. One same-tier retry may repair invalid JSON/schema. A second failure becomes a coverage gap.
+The review-run owner runs `scripts/validate_findings.py --snapshot <snapshot> --input <result.json>`. It verifies required fields, enum values, snapshot hash, old/new or non-line locations, evidence paths and line bounds against captured blobs/index/commits, structured unverifiable/coverage/command records, status consistency, sensitive candidate metadata, and exact duplicates. Invalid output is fail-closed: it returns errors without republishing the raw reviewer result. One same-tier retry may repair invalid JSON/schema. A second failure becomes a coverage gap.
 
 ## Rebuttal verdicts
 
@@ -53,4 +53,4 @@ Never collapse these states:
 
 `validate_findings.py` reports a valid result's `state` as `no_finding`, `open_questions`, `findings`, `partial`, or `failed`; use it rather than re-deriving the state from the result.
 
-If the snapshot is stale, do not issue a clean verdict. If any reviewer is `open_questions`, list its unverifiable items with the conclusion and do not state the review as clean. If any selected reviewer is `not_evaluated`, qualify the conclusion to its actual coverage.
+Immediately before aggregation, the same review-run owner that created the snapshot must verify it again. If the snapshot is stale, stop aggregation and do not issue a clean verdict. If any reviewer is `open_questions`, list its unverifiable items with the conclusion and do not state the review as clean. If any selected reviewer is `not_evaluated`, qualify the conclusion to its actual coverage.

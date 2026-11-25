@@ -14,8 +14,10 @@ import validate_execution_ledger
 import route_selection
 
 
-VERSION = 2
+VERSION = 3
 STATUS = {"passed", "failed", "blocked", "not_run", "unavailable"}
+HASH_FIELDS = {"skill_md_sha256", "challenge_sha256"}
+NESTED_FIELDS = {"owner_challenge_sha256", "worker_challenge_sha256"}
 
 
 def digest(value: Any) -> str:
@@ -23,30 +25,46 @@ def digest(value: Any) -> str:
 
 
 def validate_fixture(value: Any) -> tuple[dict[str, Any] | None, list[str]]:
-    expected = {"schema_version", "run_id", "snapshot_hash", "discovery"}
-    if not isinstance(value, dict) or set(value) != expected or value.get("schema_version") != 2:
+    expected = {"schema_version", "run_id", "snapshot_hash", "discovery", "nested_owner"}
+    if not isinstance(value, dict) or set(value) != expected or value.get("schema_version") != 3:
         return None, ["fixture has an unsupported schema"]
     if not isinstance(value.get("run_id"), str) or not value["run_id"] or not isinstance(value.get("snapshot_hash"), str) or len(value["snapshot_hash"]) != 64 or any(char not in "0123456789abcdef" for char in value["snapshot_hash"]):
         return None, ["fixture identity is invalid"]
     discovery = value.get("discovery")
-    if not isinstance(discovery, dict) or set(discovery) != {"skill_md_sha256", "challenge_sha256"} or any(not isinstance(item, str) or len(item) != 64 or any(char not in "0123456789abcdef" for char in item) for item in discovery.values()):
+    nested = value.get("nested_owner")
+    if not isinstance(discovery, dict) or set(discovery) != HASH_FIELDS or any(not isinstance(item, str) or len(item) != 64 or any(char not in "0123456789abcdef" for char in item) for item in discovery.values()):
         return None, ["fixture discovery contract is invalid"]
+    if not isinstance(nested, dict) or set(nested) != NESTED_FIELDS or any(not isinstance(item, str) or len(item) != 64 or any(char not in "0123456789abcdef" for char in item) for item in nested.values()):
+        return None, ["fixture nested-owner contract is invalid"]
     return value, []
 
 
 def validate_host(value: Any, host: str) -> tuple[dict[str, Any] | None, list[str]]:
     errors: list[str] = []
-    expected = {"schema_version", "host", "run_id", "fixture_hash", "snapshot_hash", "status", "model", "effort", "observed_discovery"}
+    expected = {"schema_version", "host", "run_id", "fixture_hash", "snapshot_hash", "status", "model", "effort", "observed_discovery", "observed_nested_owner", "delegation_trace"}
     if not isinstance(value, dict) or set(value) != expected:
         return None, ["host artifact has an unsupported schema"]
-    if value["schema_version"] != 3 or value["host"] != host or value["status"] not in STATUS:
+    if value["schema_version"] != 5 or value["host"] != host or value["status"] not in STATUS:
         errors.append("host artifact has invalid version, host, or status")
     if any(not isinstance(value[key], str) or not value[key] for key in ("run_id", "fixture_hash", "snapshot_hash")):
         errors.append("host artifact identity is invalid")
-    expected_model = "gpt-5.6-luna" if host == "codex" else "haiku"
-    if value.get("model") != expected_model or value.get("effort") != "low": errors.append("host artifact model policy is invalid")
+    if value.get("model") != "default" or value.get("effort") != "default":
+        errors.append("host artifact must record the requested host defaults")
     if value.get("status") == "passed" and (not isinstance(value.get("observed_discovery"), dict) or set(value["observed_discovery"]) != {"skill_md_sha256", "challenge_sha256"}):
         errors.append("passed host artifact lacks observed discovery evidence")
+    nested = value.get("observed_nested_owner")
+    nested_keys = {"status", "owner_challenge_sha256", "worker_challenge_sha256", "worker_spawned_by", "worker_spawned_descendants"}
+    if value.get("status") == "passed" and (
+        not isinstance(nested, dict)
+        or set(nested) != nested_keys
+        or nested.get("status") != "passed"
+        or nested.get("worker_spawned_by") != "nested_owner"
+        or nested.get("worker_spawned_descendants") is not False
+    ):
+        errors.append("passed host artifact lacks successful nested-owner evidence")
+    expected_method = "codex_task_tree" if host == "codex" else "claude_hidden_worker_challenge"
+    if value.get("status") == "passed" and value.get("delegation_trace") != {"verified": True, "method": expected_method}:
+        errors.append("passed host artifact lacks verified delegation trace")
     return value, errors
 
 
@@ -122,6 +140,16 @@ def validate_pair(codex: Any, claude: Any, fixture: Any, snapshot: Any, componen
             errors.append("Codex discovery evidence does not match supplied fixture")
         if claude_value.get("status") == "passed" and claude_value.get("observed_discovery") != fixture_value["discovery"]:
             errors.append("Claude discovery evidence does not match supplied fixture")
+        expected_nested = {
+            "status": "passed",
+            **fixture_value["nested_owner"],
+            "worker_spawned_by": "nested_owner",
+            "worker_spawned_descendants": False,
+        }
+        if codex_value.get("status") == "passed" and codex_value.get("observed_nested_owner") != expected_nested:
+            errors.append("Codex nested-owner evidence does not match supplied fixture")
+        if claude_value.get("status") == "passed" and claude_value.get("observed_nested_owner") != expected_nested:
+            errors.append("Claude nested-owner evidence does not match supplied fixture")
     component_complete = all(component_paths)
     gate_ready = False
     if component_complete:

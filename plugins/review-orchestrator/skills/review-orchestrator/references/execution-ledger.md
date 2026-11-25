@@ -1,6 +1,6 @@
 # Execution ledger
 
-The main orchestrator, never a reviewer, records one entry for each attempted selected role in a host-neutral ledger and validates it with `scripts/validate_execution_ledger.py`. The ledger is an audit record, not reviewer self-report.
+The review-run owner, never a reviewer, records one entry for each attempted selected role in a host-neutral ledger and validates it with `scripts/validate_execution_ledger.py`. One owner writes the entire ledger; do not merge entries from parent and child orchestrators. The ledger is an audit record, not reviewer self-report.
 
 ```json
 {

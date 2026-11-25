@@ -6,7 +6,7 @@ One rebuttal subagent receives one mechanically valid finding and tries to break
 
 ## Independence
 
-The main session dispatches one rebuttal per mechanically valid finding after `scripts/validate_findings.py` accepts the reviewer result and before the validator subagent runs. Each rebuttal receives the same immutable evidence packet, exactly one finding, and this definition.
+The review-run owner dispatches one rebuttal per mechanically valid finding after `scripts/validate_findings.py` accepts the reviewer result and before the validator subagent runs. Each rebuttal receives the same immutable evidence packet, exactly one finding, and this definition.
 
 A rebuttal never receives another finding, another rebuttal's verdict, the rest of its reviewer's output, or the validator's conclusion. A reviewer never rebuts a finding, its own or anyone's. A rebuttal never spawns a subagent and never edits code.
 
@@ -36,7 +36,7 @@ Supporting evidence and counter-evidence use the shared evidence shape and are c
 
 ## What happens to the verdict
 
-The validator receives every finding together with its verdict and reconciles them; see [aggregation.md](aggregation.md). A refuted finding is reported as refuted with its counter-evidence and is never dropped silently. Where the validator and the rebuttal reach supported but conflicting conclusions, the conflict goes to `unresolved` rather than being settled by the main session.
+The validator receives every finding together with its verdict and reconciles them; see [aggregation.md](aggregation.md). A refuted finding is reported as refuted with its counter-evidence and is never dropped silently. Where the validator and the rebuttal reach supported but conflicting conclusions, the conflict goes to `unresolved` rather than being settled by the review-run owner.
 
 ## Exclude
 

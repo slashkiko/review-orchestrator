@@ -131,7 +131,7 @@ def load_executable_map(path: str | None, root: Path) -> dict[str, tuple[Path, s
         return {}
     map_path = Path(path).resolve()
     if map_path.is_relative_to(root):
-        raise GateError("executable map must be main-owned and outside the reviewed repository")
+        raise GateError("executable map must be review-run-owner-controlled and outside the reviewed repository")
     value = json.loads(map_path.read_text(encoding="utf-8"))
     if not isinstance(value, dict) or set(value) != {"schema_version", "executables"} or value.get("schema_version") != 1 or not isinstance(value.get("executables"), list):
         raise GateError("executable map has an unsupported schema")
@@ -268,7 +268,7 @@ def main() -> int:
     parser.add_argument("--snapshot", required=True)
     parser.add_argument("--approval", required=True)
     parser.add_argument("--resume-ledger")
-    parser.add_argument("--executable-map", help="main-owned private executable resolution map")
+    parser.add_argument("--executable-map", help="review-run-owner-controlled private executable resolution map")
     parser.add_argument("--timeout-seconds", type=int, default=300)
     parser.add_argument("--execute", action="store_true", help="run approved argv; default is dry-run")
     parser.add_argument("--output", default="-")

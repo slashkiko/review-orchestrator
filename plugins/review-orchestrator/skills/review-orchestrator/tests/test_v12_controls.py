@@ -286,38 +286,137 @@ class V12ControlsTest(unittest.TestCase):
         metrics = json.loads(measured.stdout)
         self.assertTrue(metrics["passed"])
         self.assertEqual(1.0, metrics["high_risk_recall"]["value"])
+        fixture_value = {
+            "schema_version": 3,
+            "run_id": "run-1",
+            "snapshot_hash": "a" * 64,
+            "discovery": {
+                "skill_md_sha256": hashlib.sha256((SKILL / "SKILL.md").read_bytes()).hexdigest(),
+                "challenge_sha256": "b" * 64,
+            },
+            "nested_owner": {
+                "owner_challenge_sha256": "c" * 64,
+                "worker_challenge_sha256": "d" * 64,
+            },
+        }
         with tempfile.TemporaryDirectory() as directory:
-            fixture = Path(directory) / "fixture.json"; fixture.write_text(json.dumps({"schema_version": 2, "run_id": "run-1", "snapshot_hash": "a" * 64, "discovery": {"skill_md_sha256": hashlib.sha256((SKILL / "SKILL.md").read_bytes()).hexdigest(), "challenge_sha256": "b" * 64}}))
+            fixture = Path(directory) / "fixture.json"; fixture.write_text(json.dumps(fixture_value))
             smoke = self.invoke(SMOKE, "--host", "codex", "--fixture", str(fixture), "--repo", str(SKILL))
         self.assertEqual(0, smoke.returncode, smoke.stderr)
-        self.assertEqual("not_run", json.loads(smoke.stdout)["status"])
-        fixture_value = {"schema_version": 2, "run_id": "run-1", "snapshot_hash": "a" * 64, "discovery": {"skill_md_sha256": hashlib.sha256((SKILL / "SKILL.md").read_bytes()).hexdigest(), "challenge_sha256": "b" * 64}}
-        argv = __import__("run_host_smoke").build_argv("codex", "/usr/bin/codex", SKILL, Path("/tmp/schema.json"), Path("/tmp/out.json"), fixture_value)
-        self.assertEqual(["/usr/bin/codex", "exec"], argv[:2])
-        self.assertIn("gpt-5.6-luna", argv)
-        claude_argv = __import__("run_host_smoke").build_argv("claude-code", "/usr/bin/claude", SKILL, Path("/tmp/schema.json"), Path("/tmp/out.json"), fixture_value)
-        self.assertEqual(["/usr/bin/claude", "--print", "--model", "haiku"], claude_argv[:4])
-        self.assertIsNone(__import__("run_host_smoke").parse_observed('{"observed_discovery":{"skill_md_sha256":"x"}}', fixture_value))
+        dry_run = json.loads(smoke.stdout)
+        self.assertEqual("not_run", dry_run["status"])
+        self.assertEqual(5, dry_run["schema_version"])
+        smoke_module = __import__("run_host_smoke")
+        argv = smoke_module.build_argv("codex", "/usr/bin/codex", SKILL, Path("/tmp/schema.json"), Path("/tmp/out.json"), fixture_value)
+        self.assertEqual(["/usr/bin/codex", "app-server", "--stdio"], argv)
+        self.assertNotIn("-m", argv)
+        self.assertIn("Do not spawn the worker from this parent context", smoke_module.prompt("codex", fixture_value))
+        claude_argv = smoke_module.build_argv("claude-code", "/usr/bin/claude", SKILL, Path("/tmp/schema.json"), Path("/tmp/out.json"), fixture_value)
+        self.assertEqual(["/usr/bin/claude", "--print"], claude_argv[:2])
+        self.assertNotIn("--model", claude_argv)
+        self.assertNotIn("--effort", claude_argv)
+        self.assertIn("--plugin-dir", claude_argv)
+        self.assertIn("stream-json", claude_argv)
+        self.assertIn("--forward-subagent-text", claude_argv)
+        self.assertEqual("--", claude_argv[-2])
+        self.assertEqual("Agent,Read,Bash", claude_argv[claude_argv.index("--tools") + 1])
+        self.assertEqual("Bash(shasum -a 256 SKILL.md)", claude_argv[claude_argv.index("--allowedTools") + 1])
+        owner_name, worker_name = smoke_module.agent_names(fixture_value)
+        agent_definitions = json.loads(claude_argv[claude_argv.index("--agents") + 1])
+        self.assertEqual(["Agent"], agent_definitions[owner_name]["tools"])
+        self.assertEqual([], agent_definitions[worker_name]["tools"])
+        self.assertIn(fixture_value["nested_owner"]["worker_challenge_sha256"], agent_definitions[worker_name]["prompt"])
+        self.assertNotIn(fixture_value["nested_owner"]["worker_challenge_sha256"], claude_argv[-1])
+        passed = json.dumps({
+            "observed_discovery": fixture_value["discovery"],
+            "observed_nested_owner": smoke_module.nested_success(fixture_value),
+        })
+        self.assertIsNotNone(smoke_module.parse_observed(passed, fixture_value))
+        fail_closed = json.dumps({
+            "observed_discovery": fixture_value["discovery"],
+            "observed_nested_owner": {
+                "status": "not_evaluated",
+                "owner_challenge_sha256": "",
+                "worker_challenge_sha256": "",
+                "worker_spawned_by": "none",
+                "worker_spawned_descendants": False,
+            },
+        })
+        self.assertIsNone(smoke_module.parse_observed(fail_closed, fixture_value))
+        self.assertIsNone(smoke_module.parse_observed('{"observed_discovery":{"skill_md_sha256":"x"}}', fixture_value))
+        codex_events = "\n".join(json.dumps(event) for event in (
+            {"type": "response_item", "payload": {"type": "function_call", "name": "spawn_agent", "namespace": "collaboration", "call_id": "spawn-1", "arguments": json.dumps({"task_name": owner_name})}},
+            {"type": "response_item", "payload": {"type": "function_call_output", "call_id": "spawn-1", "output": json.dumps({"task_name": f"/root/{owner_name}"})}},
+            {"type": "response_item", "payload": {"type": "function_call", "name": "list_agents", "namespace": "collaboration", "call_id": "list-1", "arguments": "{}"}},
+            {"type": "response_item", "payload": {"type": "function_call_output", "call_id": "list-1", "output": json.dumps({"agents": [
+                {"agent_name": "/root", "agent_status": "running"},
+                {"agent_name": f"/root/{owner_name}", "agent_status": {"completed": "owner"}},
+                {"agent_name": f"/root/{owner_name}/{worker_name}", "agent_status": {"completed": "worker"}},
+            ]})}},
+        ))
+        self.assertTrue(smoke_module.verify_codex_trace(codex_events, fixture_value))
+        failed_spawn = codex_events.replace(json.dumps({"task_name": f"/root/{owner_name}"}).replace('"', '\\"'), "collab spawn failed: no rollout found")
+        self.assertFalse(smoke_module.verify_codex_trace(failed_spawn, fixture_value))
+        self.assertFalse(smoke_module.verify_codex_trace(codex_events.replace('"namespace": "collaboration"', '"namespace": "untrusted"'), fixture_value))
+        direct_worker_events = codex_events.replace(f"/root/{owner_name}/{worker_name}", f"/root/{worker_name}")
+        self.assertFalse(smoke_module.verify_codex_trace(direct_worker_events, fixture_value))
+        incomplete_worker_events = codex_events.replace('\\"completed\\": \\"worker\\"', '\\"completed\\": false')
+        self.assertFalse(smoke_module.verify_codex_trace(incomplete_worker_events, fixture_value))
+        public_codex_events = "\n".join(json.dumps(event) for event in (
+            {"type": "item.completed", "item": {"id": "spawn", "type": "collab_tool_call", "tool": "spawn_agent", "status": "completed", "agents_states": {}}},
+            {"type": "item.completed", "item": {"id": "list", "type": "collab_tool_call", "tool": "list_agents", "status": "completed", "agents_states": {
+                "/root": {"status": "running"},
+                f"/root/{owner_name}": {"status": "completed"},
+                f"/root/{owner_name}/{worker_name}": {"status": "completed"},
+            }}},
+        ))
+        self.assertTrue(smoke_module.verify_codex_trace(public_codex_events, fixture_value))
+        claude_events = json.dumps({
+            "type": "assistant",
+            "message": {"content": [{"type": "tool_use", "id": "owner-call", "name": "Agent", "input": {"subagent_type": owner_name}}]},
+        })
+        self.assertTrue(smoke_module.verify_claude_trace(claude_events, fixture_value))
+        direct_claude = claude_events.replace(owner_name, worker_name)
+        self.assertFalse(smoke_module.verify_claude_trace(direct_claude, fixture_value))
         with mock.patch("run_host_smoke.subprocess.run", return_value=subprocess.CompletedProcess([], 1)):
-            self.assertFalse(__import__("run_host_smoke").host_ready("claude-code", "/usr/bin/claude"))
+            self.assertFalse(smoke_module.host_ready("claude-code", "/usr/bin/claude"))
 
     def test_e2e_rejects_not_run_and_arbitrary_equal_fixture_hash(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             snapshot, _ = self.snapshot(Path(directory))
-            fixture = {"schema_version": 2, "run_id": "run-1", "snapshot_hash": snapshot["snapshot_hash"], "discovery": {"skill_md_sha256": "a" * 64, "challenge_sha256": "b" * 64}}
-            base = {"schema_version": 3, "run_id": "run-1", "fixture_hash": HOST_MODULE.digest(fixture), "snapshot_hash": snapshot["snapshot_hash"], "status": "not_run", "model": "gpt-5.6-luna", "effort": "low", "observed_discovery": None}
-            codex, claude = {**base, "host": "codex"}, {**base, "host": "claude-code", "model": "haiku"}
+            fixture = {
+                "schema_version": 3,
+                "run_id": "run-1",
+                "snapshot_hash": snapshot["snapshot_hash"],
+                "discovery": {"skill_md_sha256": "a" * 64, "challenge_sha256": "b" * 64},
+                "nested_owner": {"owner_challenge_sha256": "c" * 64, "worker_challenge_sha256": "d" * 64},
+            }
+            base = {"schema_version": 5, "run_id": "run-1", "fixture_hash": HOST_MODULE.digest(fixture), "snapshot_hash": snapshot["snapshot_hash"], "status": "not_run", "model": "default", "effort": "default", "observed_discovery": None, "observed_nested_owner": None, "delegation_trace": None}
+            codex, claude = {**base, "host": "codex"}, {**base, "host": "claude-code"}
             output, _ = HOST_MODULE.validate_pair(codex, claude, fixture, snapshot, [None] * 4)
             self.assertFalse(output["passed"])
             codex["fixture_hash"] = claude["fixture_hash"] = "c" * 64
             output, errors = HOST_MODULE.validate_pair(codex, claude, fixture, snapshot, [None] * 4)
             self.assertFalse(output["valid"])
             self.assertTrue(any("fixture" in error for error in errors))
-            codex.update(fixture_hash=HOST_MODULE.digest(fixture), status="passed", observed_discovery={"skill_md_sha256": "c" * 64, "challenge_sha256": "d" * 64})
-            claude.update(fixture_hash=HOST_MODULE.digest(fixture), status="passed", observed_discovery=fixture["discovery"])
+            nested = {"status": "passed", **fixture["nested_owner"], "worker_spawned_by": "nested_owner", "worker_spawned_descendants": False}
+            codex.update(fixture_hash=HOST_MODULE.digest(fixture), status="passed", observed_discovery={"skill_md_sha256": "c" * 64, "challenge_sha256": "d" * 64}, observed_nested_owner=nested, delegation_trace={"verified": True, "method": "codex_task_tree"})
+            claude.update(fixture_hash=HOST_MODULE.digest(fixture), status="passed", observed_discovery=fixture["discovery"], observed_nested_owner=nested, delegation_trace={"verified": True, "method": "claude_hidden_worker_challenge"})
             output, errors = HOST_MODULE.validate_pair(codex, claude, fixture, snapshot, [None] * 4)
             self.assertFalse(output["valid"])
             self.assertTrue(any("Codex discovery evidence" in error for error in errors))
+
+            codex["observed_discovery"] = fixture["discovery"]
+            codex["observed_nested_owner"] = {**nested, "worker_spawned_by": "parent"}
+            output, errors = HOST_MODULE.validate_pair(codex, claude, fixture, snapshot, [None] * 4)
+            self.assertFalse(output["valid"])
+            self.assertTrue(any("nested-owner" in error for error in errors))
+
+            codex["observed_nested_owner"] = nested
+            codex["delegation_trace"] = None
+            output, errors = HOST_MODULE.validate_pair(codex, claude, fixture, snapshot, [None] * 4)
+            self.assertFalse(output["valid"])
+            self.assertTrue(any("delegation trace" in error for error in errors))
 
     def test_e2e_component_validators_reject_malformed_gates_and_scope_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

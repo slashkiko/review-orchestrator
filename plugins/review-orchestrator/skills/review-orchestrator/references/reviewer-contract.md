@@ -20,7 +20,7 @@ Return one JSON object and no prose outside it:
 }
 ```
 
-`status` is `completed`, `partial`, or `failed`. `completed` requires examined coverage and no unevaluated items. `partial` requires both examined and not-examined coverage. `failed` has no findings, unverifiable items, or examined coverage and must name the unevaluated area. An empty `findings` array means no supported finding only for the areas in `coverage.examined`.
+`status` is `completed`, `partial`, or `failed`. `completed` requires examined coverage and an empty `not_examined`; it may carry `unverifiable` items for questions that were examined but could not be settled. `partial` requires both examined and not-examined coverage. `failed` has no findings, unverifiable items, or examined coverage and must name the unevaluated area. An empty `findings` array means no supported finding only for the areas in `coverage.examined`.
 
 Gate startup/configuration failures use `outcome: blocked` and are coverage facts, not LLM findings. A failed command must have a deliberate attribution; do not label a command failure diff-caused without evidence.
 
